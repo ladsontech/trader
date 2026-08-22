@@ -33,13 +33,20 @@ export const TRADEBOT_WEBHOOK_URL =
   `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/tbMarzPayWebhook`;
 
 /**
- * Investio routes Marz Pay traffic through a VPC connector so the
- * provider sees a stable egress IP (their API is IP-allowlisted).
- * We reuse the same connector.
+ * Investio routes Marz Pay traffic through a VPC connector so the provider
+ * sees a stable egress IP (their API is IP-allowlisted). We reuse the same
+ * connector.
+ *
+ * If that connector does not exist in this project the DEPLOY fails, not the
+ * request — so it has to be switchable. Set MARZPAY_VPC_CONNECTOR to an empty
+ * value in functions/.env to turn it off. Note the `!== undefined` check: a
+ * plain `||` would treat the empty string as "unset" and silently put the
+ * default back, which is exactly the case we need to be able to disable.
  */
 const MARZPAY_VPC_CONNECTOR =
-  process.env.MARZPAY_VPC_CONNECTOR ||
-  `projects/${PROJECT_ID}/locations/${REGION}/connectors/marzpay-egress`;
+  process.env.MARZPAY_VPC_CONNECTOR !== undefined
+    ? process.env.MARZPAY_VPC_CONNECTOR.trim()
+    : `projects/${PROJECT_ID}/locations/${REGION}/connectors/marzpay-egress`;
 
 export const marzPayCallableOptions = {
   secrets: [MARZPAY_API_KEY],
@@ -65,6 +72,7 @@ export const marzPayRequestOptions = {
 export const COL = {
   users: "tradebot_users",
   transactions: "tradebot_transactions",
+  activePayments: "tradebot_active_payments",
   subscriptions: "tradebot_subscriptions",
   brokers: "tradebot_broker_connections",
   trades: "tradebot_trades",

@@ -19,9 +19,31 @@ async function call<TReq extends object, TRes>(name: string, payload?: TReq): Pr
 /** Turns a Firebase callable error into something worth showing a user. */
 export function apiErrorMessage(error: unknown, fallback: string): string {
   const err = error as { code?: string; message?: string };
-  if (err?.message && !/^internal$/i.test(err.message)) {
-    return err.message.replace(/^Firebase:\s*/i, '');
+  const code = (err?.code || '').replace(/^functions\//, '');
+  const message = (err?.message || '').replace(/^Firebase:\s*/i, '').trim();
+
+  // A callable that has not been deployed fails CORS in the browser before it
+  // ever reaches Google, and the Firebase SDK surfaces that as a bare
+  // `internal` or `not-found` with the code echoed as the message. That is an
+  // infrastructure problem, not something the user did wrong — so log the real
+  // cause for whoever is on call and show them something actionable.
+  const isUnreachable =
+    code === 'not-found' ||
+    code === 'unavailable' ||
+    (code === 'internal' && (!message || /^internal$/i.test(message)));
+
+  if (isUnreachable) {
+    console.error(
+      '[TradeBot] A Cloud Function could not be reached. If this is a new ' +
+        'environment, the tradebot codebase has probably not been deployed:\n' +
+        '  cd functions && npm install && cd ..\n' +
+        '  firebase deploy --only functions:tradebot',
+      error
+    );
+    return 'We could not reach the payment service. Please try again in a moment — if it keeps failing, contact support.';
   }
+
+  if (message && !/^[a-z-]+$/.test(message)) return message;
   return fallback;
 }
 

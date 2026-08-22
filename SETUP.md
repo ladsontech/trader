@@ -156,6 +156,51 @@ Deploys to Vercel as-is (`vercel.json` already rewrites to `index.html`).
 
 ---
 
+## 3b. Troubleshooting
+
+### "Payment not completed — internal" when sending the prompt
+
+The TradeBot functions are not deployed. `Subscribe.tsx` calls
+`tbInitiateSubscription`; if that function does not exist on the project, the
+browser's request fails CORS before it reaches Google, and the Firebase SDK
+reports the whole class of failure as a bare `internal` with no detail.
+
+Check which functions actually exist:
+
+```bash
+firebase functions:list --project investio-ug
+```
+
+If `tbInitiateSubscription` is missing, deploy (§3). The frontend now also logs
+the real cause and the exact deploy command to the browser console when it hits
+this, instead of leaving you guessing.
+
+### The deploy itself fails
+
+| Error | Cause | Fix |
+| --- | --- | --- |
+| `Secret METAAPI_TOKEN does not exist` | Firebase binds every secret named in the codebase at deploy time, so a missing one blocks **all** TradeBot functions — payments included | Create it, even with a placeholder: `firebase functions:secrets:set METAAPI_TOKEN`. Payments will work; broker connection stays broken until it holds a real token |
+| `VPC connector ... not found` | The shared `marzpay-egress` connector does not exist in this project | Copy `functions/.env.example` to `functions/.env` and uncomment the empty `MARZPAY_VPC_CONNECTOR=` line |
+| `HTTP Error: 403 ... Cloud Build` / billing | The project is not on Blaze, or APIs are disabled | Enable billing and the Cloud Build + Cloud Run + Secret Manager APIs |
+
+### The prompt arrives but the plan never activates
+
+Marz Pay is calling a webhook URL that does not resolve. Confirm the deployed
+URL of `tbMarzPayWebhook` matches what `config.ts` computes; if your region is
+not `us-central1`, set `TRADEBOT_WEBHOOK_URL` in `functions/.env` and redeploy.
+
+`tbCheckPayment` polls the provider every 8 seconds from the browser as a
+backstop, so a late callback self-heals — a wrong URL does not.
+
+### First payment throws FAILED_PRECONDITION about an index
+
+It should not any more. The "is a prompt already live?" lookup reads a single
+document at `tradebot_active_payments/{uid}` rather than running a
+`where(userId) + where(status) + orderBy(createdAt)` query, which would have
+needed a composite index that does not exist on a fresh project.
+
+---
+
 ## 4. How the app flows
 
 ```

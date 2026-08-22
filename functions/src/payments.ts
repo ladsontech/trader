@@ -84,24 +84,25 @@ export const tbInitiateSubscription = onCall(
     const localPhone = normalizeUgandanPhone(phoneNumber);
 
     // Reuse a live prompt instead of spamming the user's handset.
-    const liveSnap = await db
-      .collection(COL.transactions)
-      .where("userId", "==", uid)
-      .where("status", "==", "pending")
-      .orderBy("createdAt", "desc")
-      .limit(1)
-      .get();
+    //
+    // This is a single document lookup by uid, NOT a compound query. A
+    // where(userId).where(status).orderBy(createdAt) query would need a
+    // composite index that does not exist on a fresh project, and Firestore
+    // would throw FAILED_PRECONDITION on the very first payment. Same reason
+    // Investio keeps an `active_deposits/{uid}` document.
+    const activeRef = db.collection(COL.activePayments).doc(uid);
+    const activeSnap = await activeRef.get();
 
-    if (!liveSnap.empty) {
-      const live = liveSnap.docs[0];
-      const age = Date.now() - timestampToMillis(live.data().createdAt);
-      if (age < PROMPT_WINDOW_MS) {
+    if (activeSnap.exists) {
+      const active = activeSnap.data()!;
+      const age = Date.now() - timestampToMillis(active.createdAt);
+      if (active.status === "pending" && age < PROMPT_WINDOW_MS && active.reference) {
         return {
           success: true,
           reused: true,
-          reference: live.id,
-          planId: live.data().planId,
-          amount: live.data().amount,
+          reference: active.reference as string,
+          planId: active.planId as string,
+          amount: Number(active.amount) || plan.price,
           message:
             "A mobile money prompt is already waiting on your phone. Enter your PIN to finish.",
         };
@@ -111,7 +112,8 @@ export const tbInitiateSubscription = onCall(
     const reference = generateReference();
     const txRef = db.collection(COL.transactions).doc(reference);
 
-    await txRef.set({
+    const openingBatch = db.batch();
+    openingBatch.set(txRef, {
       userId: uid,
       type: "subscription",
       planId: plan.id,
@@ -126,6 +128,15 @@ export const tbInitiateSubscription = onCall(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    openingBatch.set(activeRef, {
+      userId: uid,
+      reference,
+      planId: plan.id,
+      amount: plan.price,
+      status: "creating",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await openingBatch.commit();
 
     try {
       const authHeader = marzPayAuthHeader(MARZPAY_API_KEY.value());
@@ -154,7 +165,9 @@ export const tbInitiateSubscription = onCall(
           reference,
           snapshot: providerSnapshot(result),
         });
-        await txRef.set(
+        const failureBatch = db.batch();
+        failureBatch.set(
+          txRef,
           {
             status: "failed",
             failureReason: sanitizeText(
@@ -164,6 +177,8 @@ export const tbInitiateSubscription = onCall(
           },
           { merge: true }
         );
+        failureBatch.delete(activeRef);
+        await failureBatch.commit();
         throw new HttpsError(
           "internal",
           "We could not send the payment prompt. Please check the number and try again."
@@ -173,7 +188,9 @@ export const tbInitiateSubscription = onCall(
       const providerIds = extractProviderIds(result);
       const providerReference = providerIds.find((id) => id !== reference);
 
-      await txRef.set(
+      const pendingBatch = db.batch();
+      pendingBatch.set(
+        txRef,
         {
           status: "pending",
           ...(providerIds.length ? { providerIds } : {}),
@@ -183,6 +200,12 @@ export const tbInitiateSubscription = onCall(
         },
         { merge: true }
       );
+      pendingBatch.set(
+        activeRef,
+        { status: "pending", updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      await pendingBatch.commit();
 
       logInfo("TradeBot subscription prompt sent", { reference, planId: plan.id });
 
@@ -206,6 +229,7 @@ export const tbInitiateSubscription = onCall(
           { merge: true }
         )
         .catch(() => undefined);
+      await activeRef.delete().catch(() => undefined);
       throw new HttpsError(
         "internal",
         "Could not start the payment. Please try again."
@@ -289,23 +313,33 @@ async function activateSubscription(reference: string): Promise<void> {
       },
       { merge: true }
     );
+
+    // Release the handset lock so the user can pay again immediately.
+    transaction.delete(db.collection(COL.activePayments).doc(tx.userId as string));
   });
 
   logInfo("TradeBot subscription activated", { reference });
 }
 
 async function failTransaction(reference: string, reason: string): Promise<void> {
-  await db
-    .collection(COL.transactions)
-    .doc(reference)
-    .set(
-      {
-        status: "failed",
-        failureReason: sanitizeText(reason || "The payment did not go through."),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+  const txRef = db.collection(COL.transactions).doc(reference);
+  const txDoc = await txRef.get();
+
+  const batch = db.batch();
+  batch.set(
+    txRef,
+    {
+      status: "failed",
+      failureReason: sanitizeText(reason || "The payment did not go through."),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  const uid = txDoc.exists ? (txDoc.data()!.userId as string | undefined) : undefined;
+  if (uid) batch.delete(db.collection(COL.activePayments).doc(uid));
+
+  await batch.commit();
 }
 
 /** Resolve a provider reference back to our transaction document. */
