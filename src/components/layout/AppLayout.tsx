@@ -7,7 +7,7 @@ import {
   Plug,
   Settings,
   Bot,
-  LogOut
+  LogOut,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
@@ -16,7 +16,7 @@ const navItems = [
   { to: '/', icon: <LayoutDashboard className="w-5 h-5" />, label: 'Dashboard' },
   { to: '/subscribe', icon: <Zap className="w-5 h-5" />, label: 'Packages' },
   { to: '/broker', icon: <Plug className="w-5 h-5" />, label: 'Brokers' },
-  { to: '/trades', icon: <BarChart3 className="w-5 h-5" />, label: 'Live Trades' },
+  { to: '/trades', icon: <BarChart3 className="w-5 h-5" />, label: 'Trades' },
   { to: '/settings', icon: <Settings className="w-5 h-5" />, label: 'Settings' },
 ];
 
@@ -33,59 +33,67 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-radial-grid flex flex-col text-slate-100 selection:bg-emerald-500/20 selection:text-emerald-400">
+    <div className="min-h-screen bg-[#080C14] text-slate-100 flex flex-col antialiased selection:bg-emerald-500/20 selection:text-emerald-400">
       
-      {/* Top Banner (Desktop & Mobile) */}
-      <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 px-4 sm:px-6 py-3.5 flex items-center justify-between">
+      {/* ── TOP APP BAR (Fixed with safe height) ── */}
+      <header className="sticky top-0 z-40 bg-[#0B111E]/90 backdrop-blur-xl border-b border-white/[0.08] h-16 px-4 sm:px-6 flex items-center justify-between shadow-sm">
+        {/* Brand Logo */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400 p-0.5 shadow-lg shadow-emerald-500/20">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-              <Bot className="w-5 h-5 text-emerald-400" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400 p-0.5 shadow-md shadow-emerald-500/20">
+            <div className="w-full h-full bg-[#080C14] rounded-[10px] flex items-center justify-center">
+              <Bot className="w-4 h-4 text-emerald-400" />
             </div>
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-white text-base sm:text-lg tracking-tight">TradeBot</span>
-              <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                PRO
+            <div className="flex items-center gap-1.5">
+              <span className="font-black text-white text-base tracking-tight">TradeBot</span>
+              <span className="px-1.5 py-0.2 text-[9px] font-black uppercase tracking-wider rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                AI
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 hidden sm:block">Automated Forex Execution &bull; Investio Gateway</p>
+            <p className="text-[10px] text-slate-400 hidden sm:block">Automated Forex Trading &bull; Investio</p>
           </div>
         </div>
 
-        {/* Header Right Stats Pill */}
-        <div className="flex items-center gap-2.5">
-          {/* Bot Status Indicator */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-white/10 text-xs">
-            <span className="relative flex h-2 w-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isBrokerConnected ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${isBrokerConnected ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+        {/* Top Right Status Badges */}
+        <div className="flex items-center gap-2">
+          {/* Live Status Pill */}
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold ${
+            isBrokerConnected
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              : isSubscribed
+              ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+          }`}>
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                isBrokerConnected ? 'bg-emerald-400' : isSubscribed ? 'bg-cyan-400' : 'bg-rose-400'
+              }`}></span>
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                isBrokerConnected ? 'bg-emerald-500' : isSubscribed ? 'bg-cyan-500' : 'bg-rose-500'
+              }`}></span>
             </span>
-            <span className="text-[11px] font-extrabold text-slate-300 hidden sm:inline">
-              {isBrokerConnected ? `${userData?.broker} Active` : isSubscribed ? 'Connect Broker' : 'Subscribe to Trade'}
-            </span>
-            <span className="text-[11px] font-extrabold text-slate-300 sm:hidden">
-              {isBrokerConnected ? 'Live' : 'Standby'}
+            <span className="text-[11px] font-extrabold uppercase tracking-wide">
+              {isBrokerConnected ? `${userData?.broker} Active` : isSubscribed ? 'Broker Standby' : 'Inactive'}
             </span>
           </div>
 
-          {/* User Profile Pill */}
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border border-white/10 text-xs font-mono font-bold text-slate-300">
-            <span className="text-emerald-400">🇺🇬</span>
+          {/* User Phone Pill (Desktop) */}
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 border border-white/10 text-xs font-mono font-bold text-slate-300">
+            <span>🇺🇬</span>
             <span>{phoneDisplay}</span>
           </div>
         </div>
       </header>
 
-      {/* App Body with Sidebar on Desktop */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
+      {/* ── APP BODY ── */}
+      <div className="flex-1 flex max-w-6xl w-full mx-auto">
         
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex flex-col w-64 p-5 space-y-6 border-r border-white/5 shrink-0">
+        <aside className="hidden lg:flex flex-col w-64 p-5 space-y-6 border-r border-white/[0.08] shrink-0">
           <div className="space-y-1">
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 px-3 mb-2">
-              Main Terminal
+              Navigation
             </div>
             {navItems.map((item) => (
               <NavLink
@@ -95,7 +103,7 @@ export default function AppLayout() {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-3 rounded-2xl text-xs font-bold transition-all duration-200 ${
                     isActive
-                      ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/5'
+                      ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-emerald-400 border border-emerald-500/30 shadow-md'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`
                 }
@@ -106,26 +114,26 @@ export default function AppLayout() {
             ))}
           </div>
 
-          {/* Subscription Status Card */}
-          <div className="mt-auto glass-panel p-4 rounded-2xl border-white/10 space-y-3">
+          {/* Subscription Status Widget */}
+          <div className="mt-auto p-4 rounded-2xl bg-[#0F172A] border border-white/[0.08] space-y-2.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-extrabold text-slate-300">Package Status</span>
-              <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+              <span className="font-extrabold text-slate-300">Plan Status</span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
                 isSubscribed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
               }`}>
-                {isSubscribed ? userData?.subscriptionPlan || 'Active' : 'Unsubscribed'}
+                {isSubscribed ? userData?.subscriptionPlan || 'Active' : 'No Plan'}
               </span>
             </div>
             <p className="text-[11px] text-slate-400 leading-relaxed">
               {isSubscribed
-                ? 'Your AI Bot is executing trades directly on your connected broker.'
-                : 'Choose a 50k or 100k package to activate automated trading.'}
+                ? 'Your bot is active and executing trades via Investio.'
+                : 'Deposit UGX 50k or 100k to activate automated trading.'}
             </p>
             <NavLink
               to="/subscribe"
               className="block text-center py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition-all"
             >
-              {isSubscribed ? 'Manage Package' : 'Activate Bot'}
+              {isSubscribed ? 'Manage Plan' : 'Subscribe Now'}
             </NavLink>
           </div>
 
@@ -139,14 +147,14 @@ export default function AppLayout() {
           </button>
         </aside>
 
-        {/* Main Content Area */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-28 lg:pb-12 min-w-0">
+        {/* ── MAIN CONTENT CONTAINER (Generous padding, never clipped) ── */}
+        <main className="flex-1 w-full p-4 sm:p-6 lg:p-8 pt-6 sm:pt-8 pb-32 lg:pb-12 min-w-0">
           <Outlet />
         </main>
       </div>
 
-      {/* Floating Bottom Nav for Mobile */}
-      <nav className="lg:hidden fixed bottom-3 left-3 right-3 z-50 glass-panel p-1.5 rounded-2xl border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-2xl">
+      {/* ── DOCKED MOBILE BOTTOM NAVIGATION (Never overlaps) ── */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0B111E]/95 backdrop-blur-2xl border-t border-white/[0.08] px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl">
         <div className="grid grid-cols-5 gap-1">
           {navItems.map((item) => {
             const isActive =
@@ -158,14 +166,14 @@ export default function AppLayout() {
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
-                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all ${
                   isActive
-                    ? 'bg-gradient-to-tr from-emerald-500/25 to-teal-500/15 text-emerald-400 border border-emerald-500/30'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-emerald-500/15 text-emerald-400 font-bold'
+                    : 'text-slate-400 hover:text-slate-200 font-medium'
                 }`}
               >
                 <div className="mb-0.5">{item.icon}</div>
-                <span className="text-[10px] font-extrabold tracking-tight">{item.label}</span>
+                <span className="text-[10px] tracking-tight">{item.label}</span>
               </NavLink>
             );
           })}

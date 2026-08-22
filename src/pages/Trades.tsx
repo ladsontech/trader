@@ -40,61 +40,61 @@ export default function Trades() {
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-slide-in">
+    <div className="space-y-6 max-w-4xl mx-auto">
       
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Trades & Execution Log
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Real-time algorithmic order stream routed to your connected broker.
-          </p>
-        </div>
-
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-950/80 border border-white/5 rounded-2xl shrink-0">
-          {(['all', 'open', 'closed'] as TradeFilter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                filter === f
-                  ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {f} {f === 'open' ? `(${openCount})` : f === 'closed' ? `(${closedCount})` : `(${ALL_TRADES.length})`}
-            </button>
-          ))}
-        </div>
+      {/* ── HEADER ── */}
+      <div className="space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          Trades & Execution Feed
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-400">
+          All algorithmic orders placed by the bot on your connected broker.
+        </p>
       </div>
 
-      {/* Metrics Summary Bar */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
-        <div className="glass-panel p-4 rounded-2xl border-white/10">
+      {/* ── STATS SUMMARY (2-column layout on mobile, clean spacing) ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="p-4 rounded-2xl bg-[#0F172A] border border-white/[0.08] shadow-sm">
           <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Open Orders</div>
-          <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono mt-1">{openCount}</div>
+          <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono mt-1">{openCount} Live</div>
         </div>
-        <div className="glass-panel p-4 rounded-2xl border-white/10">
+
+        <div className="p-4 rounded-2xl bg-[#0F172A] border border-white/[0.08] shadow-sm">
           <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Closed Orders</div>
           <div className="text-xl sm:text-2xl font-black text-white font-mono mt-1">{closedCount}</div>
         </div>
-        <div className="glass-panel p-4 rounded-2xl border-white/10">
-          <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Cumulative P&L</div>
+
+        <div className="col-span-2 sm:col-span-1 p-4 rounded-2xl bg-[#0F172A] border border-emerald-500/20 bg-emerald-950/10 shadow-sm">
+          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Cumulative Net P&L</div>
           <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono mt-1">
             +${totalPnl.toFixed(2)}
           </div>
         </div>
       </div>
 
-      {/* Trades Table / Cards */}
-      <div className="glass-panel rounded-3xl border-white/10 overflow-hidden divide-y divide-white/5">
+      {/* ── FILTER TABS ── */}
+      <div className="flex items-center gap-1.5 p-1 bg-[#0F172A] border border-white/[0.08] rounded-2xl max-w-sm">
+        {(['all', 'open', 'closed'] as TradeFilter[]).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              filter === f
+                ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            {f} {f === 'open' ? `(${openCount})` : f === 'closed' ? `(${closedCount})` : `(${ALL_TRADES.length})`}
+          </button>
+        ))}
+      </div>
+
+      {/* ── TRADES LIST ── */}
+      <div className="bg-[#0F172A] rounded-2xl sm:rounded-3xl border border-white/[0.08] divide-y divide-white/[0.05] overflow-hidden shadow-sm">
         {filteredTrades.map((t) => (
           <div key={t.id} className="p-4 sm:p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-            <div className="flex items-center gap-3.5 sm:gap-4">
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-xs font-mono shadow-sm ${
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-xs font-mono shrink-0 ${
                 t.direction === 'BUY'
                   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                   : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
@@ -103,29 +103,28 @@ export default function Trades() {
               </div>
 
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   <span className="font-extrabold text-white text-sm sm:text-base">{t.pair}</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
                     t.direction === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                   }`}>
                     {t.direction} {t.lotSize}L
                   </span>
                   {t.status === 'open' && (
-                    <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full flex items-center gap-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span> Live
                     </span>
                   )}
                 </div>
 
-                <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                  In: <span className="text-slate-300 font-bold">{t.entryPrice}</span> &bull; {t.status === 'open' ? 'Current: ' : 'Out: '}
+                <div className="text-[10px] sm:text-xs text-slate-400 font-mono mt-0.5">
+                  In: <span className="text-slate-300 font-bold">{t.entryPrice}</span> &bull; {t.status === 'open' ? 'Now: ' : 'Out: '}
                   <span className="text-slate-300 font-bold">{t.exitPrice || t.currentPrice}</span>
                 </div>
               </div>
             </div>
 
-            {/* Right Profit & Timestamp */}
-            <div className="text-right">
+            <div className="text-right shrink-0">
               <div className={`text-sm sm:text-base font-black font-mono ${
                 t.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'
               }`}>
