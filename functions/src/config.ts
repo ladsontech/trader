@@ -96,7 +96,7 @@ export const PLANS: Record<string, PlanDef> = {
     id: "standard",
     name: "Standard Bot",
     price: 50000,
-    durationDays: 30,
+    durationDays: 365,
     maxSymbols: 3,
     symbols: ["EURUSD", "GBPUSD", "USDJPY"],
     riskPercent: 0.5,
@@ -106,7 +106,7 @@ export const PLANS: Record<string, PlanDef> = {
     id: "premium",
     name: "VIP Premium Bot",
     price: 100000,
-    durationDays: 30,
+    durationDays: 365,
     maxSymbols: 8,
     symbols: [
       "EURUSD",

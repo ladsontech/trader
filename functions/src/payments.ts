@@ -64,9 +64,10 @@ export const tbInitiateSubscription = onCall(
       throw new HttpsError("unauthenticated", "Please sign in first.");
     }
     const uid = request.auth.uid;
-    const { planId, phoneNumber } = (request.data || {}) as {
+    const { planId, phoneNumber, forceNew } = (request.data || {}) as {
       planId?: string;
       phoneNumber?: string;
+      forceNew?: boolean;
     };
 
     const plan = planId ? PLANS[planId] : undefined;
@@ -83,20 +84,15 @@ export const tbInitiateSubscription = onCall(
     const formattedPhone = formatPhone(phoneNumber);
     const localPhone = normalizeUgandanPhone(phoneNumber);
 
-    // Reuse a live prompt instead of spamming the user's handset.
-    //
-    // This is a single document lookup by uid, NOT a compound query. A
-    // where(userId).where(status).orderBy(createdAt) query would need a
-    // composite index that does not exist on a fresh project, and Firestore
-    // would throw FAILED_PRECONDITION on the very first payment. Same reason
-    // Investio keeps an `active_deposits/{uid}` document.
     const activeRef = db.collection(COL.activePayments).doc(uid);
     const activeSnap = await activeRef.get();
 
-    if (activeSnap.exists) {
+    // If user asked to force a new request or changed their number, bypass prompt reuse
+    if (activeSnap.exists && !forceNew) {
       const active = activeSnap.data()!;
       const age = Date.now() - timestampToMillis(active.createdAt);
-      if (active.status === "pending" && age < PROMPT_WINDOW_MS && active.reference) {
+      const isSamePhone = !active.phoneDigits || active.phoneDigits === localPhone;
+      if (active.status === "pending" && age < PROMPT_WINDOW_MS && active.reference && isSamePhone) {
         return {
           success: true,
           reused: true,
@@ -104,7 +100,7 @@ export const tbInitiateSubscription = onCall(
           planId: active.planId as string,
           amount: Number(active.amount) || plan.price,
           message:
-            "A mobile money prompt is already waiting on your phone. Enter your PIN to finish.",
+            "A mobile money prompt is waiting on your phone. Enter your PIN or tap cancel below to change your number.",
         };
       }
     }
@@ -133,6 +129,7 @@ export const tbInitiateSubscription = onCall(
       reference,
       planId: plan.id,
       amount: plan.price,
+      phoneDigits: localPhone,
       status: "creating",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -494,6 +491,43 @@ export const tbCheckPayment = onCall(marzPayCallableOptions, async (request) => 
   }
 
   return { status: "pending", failureReason: null };
+});
+
+/* ────────────────────────────────────────────────────────────────
+ * tbCancelPayment
+ * ──────────────────────────────────────────────────────────────── */
+export const tbCancelPayment = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Please sign in first.");
+  }
+  const uid = request.auth.uid;
+  const { reference } = (request.data || {}) as { reference?: string };
+
+  const activeRef = db.collection(COL.activePayments).doc(uid);
+  await activeRef.delete().catch(() => undefined);
+
+  if (reference) {
+    const txRef = db.collection(COL.transactions).doc(reference);
+    const snap = await txRef.get().catch(() => null);
+    if (snap && snap.exists && snap.data()?.userId === uid) {
+      const currentStatus = snap.data()?.status;
+      if (currentStatus === "pending" || currentStatus === "creating") {
+        await txRef
+          .set(
+            {
+              status: "failed",
+              failureReason: "Cancelled by user.",
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+          .catch(() => undefined);
+      }
+    }
+  }
+
+  logInfo("Payment prompt cancelled by user", { uid, reference });
+  return { success: true };
 });
 
 /* ────────────────────────────────────────────────────────────────

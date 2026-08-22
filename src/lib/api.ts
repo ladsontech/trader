@@ -58,10 +58,14 @@ export interface InitiateSubscriptionResult {
   message?: string;
 }
 
-export function initiateSubscription(planId: string, phoneNumber: string) {
-  return call<{ planId: string; phoneNumber: string }, InitiateSubscriptionResult>(
+export function initiateSubscription(
+  planId: string,
+  phoneNumber: string,
+  forceNew?: boolean
+) {
+  return call<{ planId: string; phoneNumber: string; forceNew?: boolean }, InitiateSubscriptionResult>(
     'tbInitiateSubscription',
-    { planId, phoneNumber }
+    { planId, phoneNumber, forceNew }
   );
 }
 
@@ -72,6 +76,12 @@ export interface PaymentStatusResult {
 
 export function checkPayment(reference: string) {
   return call<{ reference: string }, PaymentStatusResult>('tbCheckPayment', { reference });
+}
+
+export function cancelPayment(reference?: string | null) {
+  return call<{ reference?: string }, { success: boolean }>('tbCancelPayment', {
+    reference: reference || undefined,
+  });
 }
 
 /* ── Broker ───────────────────────────────────────────────────── */

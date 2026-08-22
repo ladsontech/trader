@@ -13,6 +13,7 @@ export {
   tbInitiateSubscription,
   tbMarzPayWebhook,
   tbCheckPayment,
+  tbCancelPayment,
 } from "./payments";
 
 export {

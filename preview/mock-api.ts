@@ -1,6 +1,7 @@
 export function apiErrorMessage(_e: unknown, f: string) { return f; }
 export const initiateSubscription = async () => ({ success: true, reused: false, reference: 'r', planId: 'premium', amount: 100000 });
 export const checkPayment = async () => ({ status: 'pending' as const, failureReason: null });
+export const cancelPayment = async () => ({ success: true });
 export const connectBroker = async () => ({} as never);
 export const disconnectBroker = async () => ({ success: true });
 export const setBotEnabled = async () => ({ success: true, botEnabled: true });
