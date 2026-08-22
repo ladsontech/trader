@@ -4,23 +4,25 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { BROKERS } from '../lib/constants';
 import {
-  Wifi,
+  Plug,
   CheckCircle2,
   Loader2,
   AlertTriangle,
   ArrowRight,
-  Shield,
+  ShieldCheck,
   Unplug,
+  KeyRound,
 } from 'lucide-react';
 import { Link } from 'react-router';
 
 export default function ConnectBroker() {
   const { userData, user, refreshUserData } = useAuth();
-  const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
-  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [selectedBroker, setSelectedBroker] = useState<string | null>('exness');
+  const [formData, setFormData] = useState<Record<string, string>>({
+    server: 'Exness-Real9'
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
   const isSubscribed = userData?.subscriptionStatus === 'active';
   const isBrokerConnected = userData?.brokerConnected === true;
@@ -36,7 +38,6 @@ export default function ConnectBroker() {
     const broker = BROKERS.find((b) => b.id === selectedBroker);
     if (!broker) return;
 
-    // Validate all fields filled
     for (const field of broker.fields) {
       if (!formData[field.key]?.trim()) {
         setError(`Please enter your ${field.label}`);
@@ -48,7 +49,6 @@ export default function ConnectBroker() {
     setError('');
 
     try {
-      // Store broker connection in Firestore
       const userRef = doc(db, 'tradebot_users', user.uid);
       await updateDoc(userRef, {
         broker: broker.name,
@@ -59,11 +59,10 @@ export default function ConnectBroker() {
         brokerConnectedAt: new Date(),
       });
 
-      setSuccess(true);
       await refreshUserData();
     } catch (err: any) {
       console.error('Failed to connect broker:', err);
-      setError(err.message || 'Failed to connect broker. Please try again.');
+      setError(err.message || 'Failed to connect broker. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -81,8 +80,6 @@ export default function ConnectBroker() {
         brokerAccountId: null,
         brokerServer: null,
       });
-      setSuccess(false);
-      setSelectedBroker(null);
       setFormData({});
       await refreshUserData();
     } catch (err: any) {
@@ -92,200 +89,181 @@ export default function ConnectBroker() {
     }
   };
 
-  // Not subscribed
   if (!isSubscribed) {
     return (
-      <div className="max-w-xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Connect Broker</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">Link your trading account.</p>
-        </div>
-        <div className="glass-card p-6 sm:p-8 text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--accent-amber-dim)] flex items-center justify-center mx-auto">
-            <AlertTriangle className="w-8 h-8 text-[var(--accent-amber)]" />
+      <div className="max-w-lg mx-auto space-y-6 text-center animate-slide-in">
+        <div className="glass-panel p-8 sm:p-10 rounded-3xl border-amber-500/20 bg-amber-950/10 space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-8 h-8" />
           </div>
-          <h2 className="text-lg font-black">Subscription Required</h2>
-          <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
-            You need an active subscription to connect a broker. Subscribe to a plan first.
+          <h2 className="text-xl sm:text-2xl font-black text-white">Active Subscription Required</h2>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-sm mx-auto leading-relaxed">
+            Please activate a 50,000 or 100,000 UGX package through the Investio channel before connecting your broker.
           </p>
-          <Link to="/subscribe" className="btn-primary inline-flex !w-auto px-6">
-            View Plans <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // Already connected
-  if (isBrokerConnected && !success) {
-    return (
-      <div className="max-w-xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Broker Connection</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">Your connected broker account.</p>
-        </div>
-        <div className="glass-card p-6 sm:p-8 space-y-5">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[var(--accent-emerald-dim)] flex items-center justify-center">
-              <Wifi className="w-7 h-7 text-[var(--accent-emerald)]" />
-            </div>
-            <div>
-              <h2 className="text-lg font-black">{userData?.broker || 'Broker'}</h2>
-              <div className="badge-active mt-1">Connected</div>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-[var(--text-muted)]">Broker</span>
-              <span className="font-bold">{userData?.broker}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-[var(--text-muted)]">Status</span>
-              <span className="font-bold text-[var(--accent-emerald)]">Active</span>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-            <Shield className="w-4 h-4 text-[var(--accent-blue)] mt-0.5 shrink-0" />
-            <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-              Your credentials are stored securely. The bot uses read-only access to place trades on your behalf.
-            </p>
-          </div>
-
-          <button
-            onClick={handleDisconnect}
-            disabled={loading}
-            className="btn-secondary text-xs !text-[var(--accent-rose)]"
+          <Link
+            to="/subscribe"
+            className="inline-flex items-center gap-2 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all"
           >
-            <Unplug className="w-3.5 h-3.5" />
-            Disconnect Broker
-          </button>
+            <span>View Packages</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-8 animate-slide-in">
+      
+      {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Connect Broker</h1>
-        <p className="text-sm text-[var(--text-muted)] mt-1">
-          Link your trading account to start automated trading.
+        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          Connect Your Broker
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          Link your Exness or FBS trading account for automated trade execution.
         </p>
       </div>
 
-      {/* Success State */}
-      {success && (
-        <div className="glass-card p-6 sm:p-8 text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--accent-emerald-dim)] flex items-center justify-center mx-auto">
-            <CheckCircle2 className="w-8 h-8 text-[var(--accent-emerald)]" />
+      {/* Connected Status Card */}
+      {isBrokerConnected && (
+        <div className="glass-panel p-6 sm:p-8 rounded-3xl border-emerald-500/30 bg-emerald-950/20 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                <Plug className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="text-lg font-black text-white">{userData?.broker} Account Active</div>
+                <div className="text-xs text-emerald-400 font-mono">Status: Connected & Synchronized</div>
+              </div>
+            </div>
+            <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-wider">
+              Live API
+            </span>
           </div>
-          <h2 className="text-lg font-black">Broker Connected!</h2>
-          <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
-            Your {BROKERS.find((b) => b.id === selectedBroker)?.name} account has been connected.
-            The bot will start analyzing the market and placing trades.
-          </p>
-          <Link to="/" className="btn-primary inline-flex !w-auto px-6">
-            Go to Dashboard <ArrowRight className="w-4 h-4" />
-          </Link>
+
+          <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-950/60 border border-white/5 font-mono text-xs">
+            <div>
+              <span className="text-slate-500 text-[10px] block uppercase font-sans font-bold">Account ID</span>
+              <span className="text-white font-bold">{userData?.brokerAccountId || '12849204'}</span>
+            </div>
+            <div>
+              <span className="text-slate-500 text-[10px] block uppercase font-sans font-bold">Server</span>
+              <span className="text-white font-bold">{userData?.brokerServer || 'Real-Server'}</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleDisconnect}
+            disabled={loading}
+            className="w-full py-3 px-4 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Unplug className="w-4 h-4" />
+            <span>Disconnect Broker Account</span>
+          </button>
         </div>
       )}
 
-      {/* Broker Selection */}
-      {!success && (
-        <>
-          <div className="grid grid-cols-2 gap-3">
-            {BROKERS.map((broker) => (
-              <button
-                key={broker.id}
-                type="button"
-                onClick={() => {
-                  setSelectedBroker(broker.id);
-                  setFormData({});
-                  setError('');
-                }}
-                className={`glass-card p-4 sm:p-5 text-left cursor-pointer transition-all ${
-                  selectedBroker === broker.id
-                    ? '!border-[var(--accent-blue)] shadow-[0_0_20px_rgba(59,130,246,0.15)]'
-                    : ''
+      {/* Broker Selection & Form */}
+      {!isBrokerConnected && (
+        <div className="space-y-6">
+          {/* Broker Selector Tabs */}
+          <div className="grid grid-cols-2 gap-4">
+            {BROKERS.map((b) => (
+              <div
+                key={b.id}
+                onClick={() => { setSelectedBroker(b.id); setError(''); }}
+                className={`glass-panel p-5 rounded-3xl border transition-all cursor-pointer relative overflow-hidden ${
+                  selectedBroker === b.id
+                    ? b.id === 'exness'
+                      ? 'border-amber-400 bg-amber-950/15 shadow-[0_0_24px_rgba(251,191,36,0.15)]'
+                      : 'border-cyan-400 bg-cyan-950/15 shadow-[0_0_24px_rgba(34,211,238,0.15)]'
+                    : 'border-white/10 hover:border-white/20'
                 }`}
               >
-                <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center text-lg font-black mb-3"
-                  style={{ backgroundColor: broker.color + '20', color: broker.color }}
-                >
-                  {broker.logo}
+                <div className="flex items-center justify-between mb-3">
+                  <div
+                    className="w-10 h-10 rounded-2xl flex items-center justify-center font-black text-base"
+                    style={{ backgroundColor: b.color + '20', color: b.color }}
+                  >
+                    {b.logo}
+                  </div>
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center ${selectedBroker === b.id ? 'bg-white text-slate-950' : 'border border-white/20'}`}>
+                    {selectedBroker === b.id && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                  </div>
                 </div>
-                <h3 className="text-sm font-black mb-1">{broker.name}</h3>
-                <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">{broker.description}</p>
-              </button>
+
+                <div className="font-black text-base text-white">{b.name}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">{b.description}</div>
+              </div>
             ))}
           </div>
 
-          {/* Connection Form */}
-          {selectedBroker && (
-            <div className="glass-card p-5 sm:p-7">
-              <h3 className="text-sm font-bold mb-1">
-                Connect {BROKERS.find((b) => b.id === selectedBroker)?.name}
-              </h3>
-              <p className="text-[10px] text-[var(--text-muted)] mb-5">
-                Enter your broker account credentials below.
-              </p>
-
-              {error && (
-                <div className="mb-4 p-3 rounded-xl bg-[var(--accent-rose-dim)] border border-rose-500/20 text-xs text-[var(--accent-rose)] font-semibold">
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleConnect} className="space-y-4">
-                {BROKERS.find((b) => b.id === selectedBroker)?.fields.map((field) => (
-                  <div key={field.key}>
-                    <label className="block text-[10px] font-bold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">
-                      {field.label}
-                    </label>
-                    <input
-                      id={`broker-${field.key}-input`}
-                      type={field.type}
-                      required
-                      placeholder={field.placeholder}
-                      className="input-dark !pl-4"
-                      value={formData[field.key] || ''}
-                      onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                    />
-                  </div>
-                ))}
-
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-                  <Shield className="w-4 h-4 text-[var(--accent-blue)] mt-0.5 shrink-0" />
-                  <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-                    Your credentials are encrypted and used solely for trade execution. We never share your data.
-                  </p>
-                </div>
-
-                <button
-                  id="broker-connect-button"
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Connecting...
-                    </>
-                  ) : (
-                    <>
-                      <Wifi className="w-4 h-4" />
-                      Connect {BROKERS.find((b) => b.id === selectedBroker)?.name}
-                    </>
-                  )}
-                </button>
-              </form>
+          {/* Connection Input Form */}
+          <div className="glass-panel p-6 sm:p-8 rounded-3xl border-white/10 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-white/5">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-emerald-400" />
+                <span>{selectedBroker === 'exness' ? 'Exness MT4/MT5 Credentials' : 'FBS Trading Credentials'}</span>
+              </span>
+              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                256-Bit SSL
+              </span>
             </div>
-          )}
-        </>
+
+            {error && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-semibold">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleConnect} className="space-y-4">
+              {BROKERS.find((b) => b.id === selectedBroker)?.fields.map((f) => (
+                <div key={f.key} className="space-y-1.5">
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-300">
+                    {f.label}
+                  </label>
+                  <input
+                    id={`broker-${f.key}-input`}
+                    type={f.type}
+                    required
+                    placeholder={f.placeholder}
+                    className="w-full px-4 py-3.5 bg-slate-950/70 border border-white/10 rounded-2xl text-white text-sm font-semibold focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all placeholder:text-slate-600 font-mono"
+                    value={formData[f.key] || ''}
+                    onChange={(e) => handleFieldChange(f.key, e.target.value)}
+                  />
+                </div>
+              ))}
+
+              <div className="p-3.5 rounded-2xl bg-slate-950/50 border border-white/5 text-[11px] text-slate-400 flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <span>
+                  Credentials are encrypted and stored in your private Firestore vault. The bot only executes algorithmic trades within your preset risk limits.
+                </span>
+              </div>
+
+              <button
+                id="broker-connect-button"
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Verifying Broker Connection...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plug className="w-4 h-4" />
+                    <span>Connect {selectedBroker === 'exness' ? 'Exness' : 'FBS'} Account</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

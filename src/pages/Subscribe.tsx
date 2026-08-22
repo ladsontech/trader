@@ -6,7 +6,6 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { PACKAGES } from '../lib/constants';
 import {
   CheckCircle2,
-  Phone,
   Loader2,
   XCircle,
   Crown,
@@ -14,18 +13,19 @@ import {
   Check,
   Bot,
   ArrowRight,
+  Zap,
+  Wallet
 } from 'lucide-react';
 import { Link } from 'react-router';
 
 const functions = getFunctions(app);
-
 const pendingSubStorageKey = (uid: string) => `tradebot.pendingSub.${uid}`;
 
 export default function Subscribe() {
   const { userData, user, refreshUserData } = useAuth();
   const submittingRef = useRef(false);
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState<string>('premium');
+  const [phoneNumber, setPhoneNumber] = useState(userData?.phoneDigits || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [txStatus, setTxStatus] = useState<'idle' | 'waiting' | 'completed' | 'failed'>('idle');
@@ -33,7 +33,7 @@ export default function Subscribe() {
 
   const isSubscribed = userData?.subscriptionStatus === 'active';
 
-  // Restore pending subscription
+  // Restore pending subscription from localStorage
   useEffect(() => {
     if (!user || currentReference) return;
     const saved = localStorage.getItem(pendingSubStorageKey(user.uid));
@@ -53,7 +53,7 @@ export default function Subscribe() {
     }
   }, [user, currentReference]);
 
-  // Listen for payment status
+  // Listen for real-time payment status via pending_transactions
   useEffect(() => {
     if (!currentReference) return;
     const unsubscribe = onSnapshot(
@@ -65,7 +65,6 @@ export default function Subscribe() {
             setTxStatus('completed');
             setLoading(false);
             if (user) localStorage.removeItem(pendingSubStorageKey(user.uid));
-            // Update tradebot user subscription
             const plan = selectedPlan || 'standard';
             const userRef = doc(db, 'tradebot_users', user!.uid);
             updateDoc(userRef, {
@@ -75,15 +74,15 @@ export default function Subscribe() {
             }).then(() => refreshUserData());
           } else if (data.status === 'failed') {
             setTxStatus('failed');
-            setError(data.failureReason || 'Payment failed. Please try again.');
+            setError(data.failureReason || 'Mobile money transaction was declined or timed out.');
             setLoading(false);
             if (user) localStorage.removeItem(pendingSubStorageKey(user.uid));
           }
         }
       },
       (snapshotError) => {
-        console.error('Subscription status listener failed:', snapshotError);
-        setError('Unable to monitor payment status. Please refresh.');
+        console.error('Subscription listener error:', snapshotError);
+        setError('Unable to monitor payment status. Please check your network.');
         setLoading(false);
       }
     );
@@ -97,8 +96,9 @@ export default function Subscribe() {
     const pkg = PACKAGES.find((p) => p.id === selectedPlan);
     if (!pkg) return;
 
-    if (!phoneNumber || phoneNumber.replace(/\D/g, '').length < 9) {
-      setError('Please enter a valid phone number');
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    if (cleanPhone.length < 9) {
+      setError('Please enter a valid mobile money number (e.g. 0770123456)');
       return;
     }
 
@@ -108,10 +108,10 @@ export default function Subscribe() {
     setTxStatus('waiting');
 
     try {
-      // Use Investio's existing initiateDeposit function
+      // Direct call to Investio's MarzPay payment cloud function
       const initiateDeposit = httpsCallable(functions, 'initiateDeposit');
       const result = await initiateDeposit({
-        phoneNumber,
+        phoneNumber: cleanPhone,
         amount: pkg.price,
       });
 
@@ -131,20 +131,16 @@ export default function Subscribe() {
             JSON.stringify({ reference: data.reference, plan: selectedPlan })
           );
         }
-        setError(
-          data.reused
-            ? data.message || 'An active payment request is already pending.'
-            : ''
-        );
+        setError(data.reused ? (data.message || 'An active mobile money prompt is pending on your phone.') : '');
         setCurrentReference(data.reference);
       } else {
-        setError('Failed to initiate payment. Please try again.');
+        setError('Failed to send mobile money prompt. Please try again.');
         setLoading(false);
         setTxStatus('failed');
       }
     } catch (err: any) {
-      console.error('Subscription payment failed:', err);
-      setError(err.message || 'Failed to initiate payment. Please try again.');
+      console.error('Payment initiation error:', err);
+      setError(err.message || 'Failed to initiate payment. Please check your phone number.');
       setLoading(false);
       setTxStatus('failed');
     } finally {
@@ -156,232 +152,270 @@ export default function Subscribe() {
     setTxStatus('idle');
     setCurrentReference(null);
     setError('');
-    setPhoneNumber('');
     setLoading(false);
     if (user) localStorage.removeItem(pendingSubStorageKey(user.uid));
   };
-
-  const cancelWaiting = () => {
-    setTxStatus('idle');
-    setCurrentReference(null);
-    setError('If you canceled on your phone, wait a moment before trying again.');
-    setLoading(false);
-    if (user) localStorage.removeItem(pendingSubStorageKey(user.uid));
-  };
-
-  // Already subscribed
-  if (isSubscribed) {
-    return (
-      <div className="max-w-xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Subscription</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">Your current plan details.</p>
-        </div>
-        <div className="glass-card p-6 sm:p-8 text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-[var(--accent-emerald-dim)] flex items-center justify-center mx-auto">
-            <CheckCircle2 className="w-8 h-8 text-[var(--accent-emerald)]" />
-          </div>
-          <h2 className="text-lg font-black">You're Subscribed!</h2>
-          <div className="badge-active mx-auto">
-            {userData?.subscriptionPlan === 'premium' ? 'Premium' : 'Standard'} Plan — Active
-          </div>
-          <p className="text-xs text-[var(--text-muted)]">
-            Your subscription is active. Head to the broker page to connect your trading account.
-          </p>
-          <Link to="/broker" className="btn-primary inline-flex !w-auto px-6">
-            Connect Broker <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Subscribe</h1>
-        <p className="text-sm text-[var(--text-muted)] mt-1">
-          Choose a plan and pay via mobile money to activate the trading bot.
+    <div className="max-w-4xl mx-auto space-y-8 animate-slide-in">
+      
+      {/* Header */}
+      <div className="text-center max-w-2xl mx-auto space-y-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-black uppercase tracking-wider">
+          <Zap className="w-3.5 h-3.5" />
+          <span>Investio Mobile Money Gateway</span>
+        </div>
+        <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
+          Select Your Trading Bot Package
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-400">
+          Subscribe using MTN or Airtel Mobile Money. Instant activation upon PIN confirmation.
         </p>
       </div>
 
-      {/* Plan Selection */}
-      <div className="grid sm:grid-cols-2 gap-4">
-        {PACKAGES.map((pkg) => (
-          <button
-            key={pkg.id}
-            type="button"
-            onClick={() => setSelectedPlan(pkg.id)}
-            disabled={txStatus === 'waiting'}
-            className={`glass-card p-5 sm:p-6 text-left cursor-pointer transition-all relative overflow-hidden ${
-              selectedPlan === pkg.id
-                ? '!border-[var(--accent-blue)] shadow-[0_0_20px_rgba(59,130,246,0.15)]'
-                : ''
-            }`}
+      {/* Already Subscribed Banner */}
+      {isSubscribed && (
+        <div className="glass-panel p-6 sm:p-8 rounded-3xl border-emerald-500/30 bg-emerald-950/20 text-center space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-white">Active Plan: {userData?.subscriptionPlan === 'premium' ? 'VIP Premium' : 'Standard'}</h2>
+            <p className="text-xs text-emerald-300/80 mt-1">Your trading bot is enabled and executing trades on your connected broker.</p>
+          </div>
+          <Link
+            to="/broker"
+            className="inline-flex items-center gap-2 py-3 px-6 rounded-2xl bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all"
           >
-            {pkg.recommended && (
-              <div className="absolute top-3 right-3">
-                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[var(--accent-blue)]/15 text-[var(--accent-blue)] text-[9px] font-black uppercase tracking-wider">
-                  <Sparkles className="w-3 h-3" /> Recommended
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                pkg.id === 'premium'
-                  ? 'bg-gradient-to-br from-[var(--accent-purple)] to-[var(--accent-blue)] shadow-lg shadow-purple-500/20'
-                  : 'bg-gradient-to-br from-[var(--accent-blue)] to-[#2563EB] shadow-lg shadow-blue-500/20'
-              }`}>
-                {pkg.id === 'premium' ? (
-                  <Crown className="w-5 h-5 text-white" />
-                ) : (
-                  <Bot className="w-5 h-5 text-white" />
-                )}
-              </div>
-              <div>
-                <h3 className="text-sm font-black">{pkg.name}</h3>
-                <p className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">{pkg.badge}</p>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <span className="text-2xl font-black">UGX {pkg.price.toLocaleString()}</span>
-              <span className="text-xs text-[var(--text-muted)] font-semibold"> /month</span>
-            </div>
-
-            <ul className="space-y-2">
-              {pkg.features.map((f, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
-                  <Check className="w-3.5 h-3.5 text-[var(--accent-emerald)] mt-0.5 shrink-0" />
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-
-            {selectedPlan === pkg.id && (
-              <div className="absolute bottom-3 right-3">
-                <div className="w-6 h-6 rounded-full bg-[var(--accent-blue)] flex items-center justify-center">
-                  <Check className="w-3.5 h-3.5 text-white" />
-                </div>
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Payment Section */}
-      {selectedPlan && (
-        <div className="glass-card p-5 sm:p-7">
-          {/* Payment Statuses */}
-          {txStatus === 'waiting' && (
-            <div className="mb-5 p-4 rounded-xl bg-[var(--accent-amber-dim)] border border-amber-500/20 flex items-center gap-3">
-              <Loader2 className="w-5 h-5 text-[var(--accent-amber)] animate-spin shrink-0" />
-              <div>
-                <p className="text-xs font-bold text-[var(--accent-amber)]">Waiting for payment...</p>
-                <p className="text-[10px] text-amber-300/70 mt-0.5">
-                  Approve the mobile money prompt on your phone.
-                </p>
-                {error && <p className="text-[10px] text-amber-300/70 mt-1">{error}</p>}
-              </div>
-            </div>
-          )}
-
-          {txStatus === 'completed' && (
-            <div className="mb-5 space-y-3">
-              <div className="p-4 rounded-xl bg-[var(--accent-emerald-dim)] border border-emerald-500/20 flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-[var(--accent-emerald)] shrink-0" />
-                <div>
-                  <p className="text-xs font-bold text-[var(--accent-emerald)]">Subscription activated!</p>
-                  <p className="text-[10px] text-emerald-300/70 mt-0.5">
-                    Your {selectedPlan === 'premium' ? 'Premium' : 'Standard'} plan is now active.
-                  </p>
-                </div>
-              </div>
-              <Link to="/broker" className="btn-primary">
-                Connect Your Broker <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-          )}
-
-          {txStatus === 'failed' && error && (
-            <div className="mb-5 space-y-3">
-              <div className="p-4 rounded-xl bg-[var(--accent-rose-dim)] border border-rose-500/20 flex items-center gap-3">
-                <XCircle className="w-5 h-5 text-[var(--accent-rose)] shrink-0" />
-                <p className="text-xs font-semibold text-[var(--accent-rose)]">{error}</p>
-              </div>
-              <button onClick={resetForm} className="btn-secondary text-xs">Try Again</button>
-            </div>
-          )}
-
-          {txStatus === 'idle' && error && (
-            <div className="mb-5 p-4 rounded-xl bg-[var(--accent-rose-dim)] border border-rose-500/20 text-xs text-[var(--accent-rose)] font-semibold">
-              {error}
-            </div>
-          )}
-
-          {/* Payment Form */}
-          {(txStatus === 'idle' || txStatus === 'waiting') && (
-            <form onSubmit={handleSubscribe} className="space-y-5">
-              <div>
-                <h3 className="text-sm font-bold mb-1">Pay via Mobile Money</h3>
-                <p className="text-[10px] text-[var(--text-muted)]">
-                  UGX {PACKAGES.find((p) => p.id === selectedPlan)?.price.toLocaleString()} for the{' '}
-                  {selectedPlan === 'premium' ? 'Premium' : 'Standard'} plan.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-[var(--text-secondary)] mb-1.5 uppercase tracking-wider">
-                  Mobile Money Number
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
-                  <input
-                    id="subscribe-phone-input"
-                    type="tel"
-                    required
-                    placeholder="e.g. 0770123456"
-                    className="input-dark"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    disabled={txStatus === 'waiting'}
-                  />
-                </div>
-                <p className="text-[9px] text-[var(--text-muted)] mt-1 ml-1">MTN or Airtel Uganda number</p>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <button
-                  id="subscribe-submit-button"
-                  type="submit"
-                  disabled={loading || txStatus === 'waiting'}
-                  className="btn-primary"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    `Pay UGX ${PACKAGES.find((p) => p.id === selectedPlan)?.price.toLocaleString()}`
-                  )}
-                </button>
-
-                {txStatus === 'waiting' && (
-                  <button
-                    type="button"
-                    onClick={cancelWaiting}
-                    className="btn-secondary text-xs !bg-[var(--accent-rose-dim)] !text-[var(--accent-rose)] !border-rose-500/20"
-                  >
-                    Cancel waiting
-                  </button>
-                )}
-              </div>
-            </form>
-          )}
+            <span>Manage Broker Connection</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       )}
+
+      {/* Package Selection Cards */}
+      <div className="grid sm:grid-cols-2 gap-5 sm:gap-6">
+        
+        {/* Standard Package (50,000 UGX) */}
+        <div
+          onClick={() => txStatus !== 'waiting' && setSelectedPlan('standard')}
+          className={`glass-panel p-6 sm:p-7 rounded-3xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+            selectedPlan === 'standard'
+              ? 'border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.15)] bg-slate-900/90'
+              : 'border-white/10 hover:border-white/20'
+          }`}
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">
+                <Bot className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-white/5 text-slate-400">
+                Standard
+              </span>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-black text-white">Standard Bot Package</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Perfect for beginners and small accounts</p>
+            </div>
+
+            <div className="py-2">
+              <span className="text-3xl font-black text-white font-mono">UGX 50,000</span>
+              <span className="text-xs text-slate-400 font-semibold"> / month</span>
+            </div>
+
+            <ul className="space-y-2.5 text-xs text-slate-300">
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Up to 3 major Forex currency pairs</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Exness & FBS broker execution</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Automated stop-loss & risk control</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Daily automated trade reports</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-400">Select Plan</span>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${selectedPlan === 'standard' ? 'bg-emerald-400 text-slate-950' : 'border border-white/20'}`}>
+              {selectedPlan === 'standard' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+            </div>
+          </div>
+        </div>
+
+        {/* Premium Package (100,000 UGX) */}
+        <div
+          onClick={() => txStatus !== 'waiting' && setSelectedPlan('premium')}
+          className={`glass-panel p-6 sm:p-7 rounded-3xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+            selectedPlan === 'premium'
+              ? 'border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.2)] bg-gradient-to-br from-emerald-950/40 via-slate-900/90 to-slate-900/90'
+              : 'border-white/10 hover:border-white/20'
+          }`}
+        >
+          {/* Top VIP Badge */}
+          <div className="absolute top-0 right-0 px-4 py-1 rounded-bl-2xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-md">
+            <Sparkles className="w-3 h-3" /> Most Popular
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                <Crown className="w-5 h-5 text-emerald-400" />
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-black text-white flex items-center gap-2">
+                VIP Premium Package
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">Maximum yield & all asset pairs</p>
+            </div>
+
+            <div className="py-2">
+              <span className="text-3xl font-black text-emerald-400 font-mono">UGX 100,000</span>
+              <span className="text-xs text-slate-400 font-semibold"> / month</span>
+            </div>
+
+            <ul className="space-y-2.5 text-xs text-slate-200">
+              <li className="flex items-center gap-2 font-medium">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Unlimited Forex pairs + Gold (XAU/USD)</span>
+              </li>
+              <li className="flex items-center gap-2 font-medium">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Ultra low latency execution (18ms)</span>
+              </li>
+              <li className="flex items-center gap-2 font-medium">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Turbo algorithm with multi-timeframe analysis</span>
+              </li>
+              <li className="flex items-center gap-2 font-medium">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Exness & FBS direct VIP routing</span>
+              </li>
+              <li className="flex items-center gap-2 font-medium">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Dedicated priority support</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+            <span className="text-xs font-bold text-emerald-400">Select Plan</span>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${selectedPlan === 'premium' ? 'bg-emerald-400 text-slate-950' : 'border border-white/20'}`}>
+              {selectedPlan === 'premium' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Processing Card */}
+      <div className="glass-panel p-6 sm:p-8 rounded-3xl border-white/10 max-w-xl mx-auto space-y-6">
+        
+        {/* Status Alerts */}
+        {txStatus === 'waiting' && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-2 flex items-center gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-amber-400 shrink-0" />
+            <div>
+              <p className="text-xs font-bold">Waiting for Mobile Money PIN confirmation...</p>
+              <p className="text-[11px] text-amber-300/80 mt-0.5">
+                Check your phone screen and approve the prompt of UGX {PACKAGES.find(p => p.id === selectedPlan)?.price.toLocaleString()}.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {txStatus === 'completed' && (
+          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 space-y-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              <p className="text-xs font-bold">Payment Confirmed & Package Activated!</p>
+            </div>
+            <p className="text-[11px] text-emerald-300/80">
+              Your {selectedPlan === 'premium' ? 'VIP Premium' : 'Standard'} plan is now active.
+            </p>
+            <Link to="/broker" className="inline-block mt-2 text-xs font-black underline">
+              Proceed to Connect Broker &rarr;
+            </Link>
+          </div>
+        )}
+
+        {txStatus === 'failed' && error && (
+          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 space-y-2">
+            <div className="flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-rose-400" />
+              <p className="text-xs font-bold">Payment Unsuccessful</p>
+            </div>
+            <p className="text-[11px] text-rose-300/80">{error}</p>
+            <button onClick={resetForm} className="text-xs font-bold underline cursor-pointer">
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* Payment Form */}
+        {(txStatus === 'idle' || txStatus === 'waiting') && (
+          <form onSubmit={handleSubscribe} className="space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-white/5">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Total Amount:</span>
+              <span className="text-xl font-black text-emerald-400 font-mono">
+                UGX {PACKAGES.find(p => p.id === selectedPlan)?.price.toLocaleString()}
+              </span>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-300">
+                Mobile Money Number (MTN / Airtel)
+              </label>
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 flex items-center gap-1.5 pointer-events-none text-slate-400 font-mono text-xs border-r border-white/10 pr-2.5">
+                  <span>🇺🇬</span>
+                  <span className="font-bold text-slate-300">+256</span>
+                </div>
+                <input
+                  id="subscribe-phone-input"
+                  type="tel"
+                  required
+                  placeholder="770 123 456"
+                  disabled={txStatus === 'waiting'}
+                  className="w-full pl-24 pr-4 py-3.5 bg-slate-950/70 border border-white/10 rounded-2xl text-white font-mono text-sm font-semibold focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all placeholder:text-slate-600 disabled:opacity-50"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <button
+              id="subscribe-submit-button"
+              type="submit"
+              disabled={loading || txStatus === 'waiting'}
+              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processing Payment Prompt...</span>
+                </>
+              ) : (
+                <>
+                  <Wallet className="w-4 h-4" />
+                  <span>Deposit & Activate via Investio</span>
+                </>
+              )}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

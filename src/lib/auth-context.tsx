@@ -10,7 +10,10 @@ export interface TradeBotUser {
   subscriptionStatus?: 'active' | 'expired' | 'none';
   subscriptionExpiresAt?: number;
   broker?: string;
+  brokerId?: string;
   brokerConnected?: boolean;
+  brokerAccountId?: string;
+  brokerServer?: string;
   totalPnl?: number;
   totalTrades?: number;
   winRate?: number;

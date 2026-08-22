@@ -3,14 +3,12 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import {
   User,
-  Bot,
-  Wifi,
-  WifiOff,
+  Plug,
   LogOut,
-  Crown,
   Calendar,
-  Phone,
   ChevronRight,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import { Link } from 'react-router';
 
@@ -24,8 +22,8 @@ export default function Settings() {
     signOut(auth);
   };
 
-  const phoneDisplay = userData?.phoneDigits || user?.email?.split('@')[0] || 'N/A';
-  const planName = userData?.subscriptionPlan === 'premium' ? 'Premium Bot' : userData?.subscriptionPlan === 'standard' ? 'Standard Bot' : 'No Plan';
+  const phoneDisplay = userData?.phoneDigits || user?.email?.split('@')[0] || 'Trader';
+  const planName = userData?.subscriptionPlan === 'premium' ? 'VIP Premium Plan' : userData?.subscriptionPlan === 'standard' ? 'Standard Plan' : 'No Active Plan';
 
   const expiresAt = userData?.subscriptionExpiresAt
     ? new Date(userData.subscriptionExpiresAt).toLocaleDateString([], {
@@ -33,118 +31,128 @@ export default function Settings() {
         month: 'short',
         day: 'numeric',
       })
-    : null;
+    : 'N/A';
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
+    <div className="max-w-xl mx-auto space-y-6 sm:space-y-8 animate-slide-in">
+      
+      {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Settings</h1>
-        <p className="text-sm text-[var(--text-muted)] mt-1">Manage your account and preferences.</p>
+        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          Account Settings
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          Manage your subscription, broker connections, and profile.
+        </p>
       </div>
 
-      {/* Profile Card */}
-      <div className="glass-card p-5 sm:p-6">
+      {/* User Profile Card */}
+      <div className="glass-panel p-6 rounded-3xl border-white/10 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--accent-blue)] to-[var(--accent-purple)] flex items-center justify-center shadow-lg shadow-blue-500/10">
-            <User className="w-7 h-7 text-white" />
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-400 to-cyan-400 p-0.5 shadow-lg shadow-emerald-500/10">
+            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-emerald-400">
+              <User className="w-6 h-6" />
+            </div>
           </div>
           <div>
-            <h2 className="text-base font-black">{phoneDisplay}</h2>
-            <div className="flex items-center gap-2 mt-1">
-              {isSubscribed ? (
-                <div className="badge-active">{planName}</div>
-              ) : (
-                <div className="badge-inactive">No Subscription</div>
-              )}
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-base font-black text-white">🇺🇬 {phoneDisplay}</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400">
+                Trader
+              </span>
             </div>
+            <p className="text-xs text-slate-400 mt-0.5">Investio Channel Authenticated</p>
           </div>
         </div>
       </div>
 
-      {/* Account Details */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-[var(--border-subtle)]">
-          <h3 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Account</h3>
-        </div>
+      {/* Settings Navigation List */}
+      <div className="glass-panel rounded-3xl border-white/10 overflow-hidden divide-y divide-white/5">
+        
+        {/* Subscription Item */}
+        <Link
+          to="/subscribe"
+          className="p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-white">Subscription Package</div>
+              <div className="text-xs text-slate-400 mt-0.5">{planName}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              isSubscribed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+            }`}>
+              {isSubscribed ? 'Active' : 'Expired'}
+            </span>
+            <ChevronRight className="w-4 h-4 text-slate-500" />
+          </div>
+        </Link>
 
-        <div className="divide-y divide-[var(--border-subtle)]">
-          <div className="flex items-center justify-between px-5 py-4">
-            <div className="flex items-center gap-3">
-              <Phone className="w-4 h-4 text-[var(--text-muted)]" />
-              <div>
-                <p className="text-xs font-bold">Phone Number</p>
-                <p className="text-[10px] text-[var(--text-muted)]">{phoneDisplay}</p>
+        {/* Broker Item */}
+        <Link
+          to="/broker"
+          className="p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+              <Plug className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-white">Connected Broker</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                {isBrokerConnected ? `${userData?.broker} (MT4/MT5)` : 'No broker linked'}
               </div>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              isBrokerConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
+            }`}>
+              {isBrokerConnected ? 'Linked' : 'Not Linked'}
+            </span>
+            <ChevronRight className="w-4 h-4 text-slate-500" />
+          </div>
+        </Link>
 
-          <Link
-            to="/subscribe"
-            className="flex items-center justify-between px-5 py-4 hover:bg-[var(--bg-card-hover)] transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              {isSubscribed ? (
-                <Crown className="w-4 h-4 text-[var(--accent-amber)]" />
-              ) : (
-                <Bot className="w-4 h-4 text-[var(--text-muted)]" />
-              )}
+        {/* Expiry Date (if subscribed) */}
+        {isSubscribed && (
+          <div className="p-5 flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                <Calendar className="w-5 h-5" />
+              </div>
               <div>
-                <p className="text-xs font-bold">Subscription</p>
-                <p className="text-[10px] text-[var(--text-muted)]">
-                  {isSubscribed ? planName : 'Not subscribed'}
-                </p>
+                <div className="text-sm font-bold text-white">Subscription Renewal</div>
+                <div className="text-xs text-slate-400 mt-0.5">{expiresAt}</div>
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
-          </Link>
-
-          {isSubscribed && expiresAt && (
-            <div className="flex items-center justify-between px-5 py-4">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-4 h-4 text-[var(--text-muted)]" />
-                <div>
-                  <p className="text-xs font-bold">Expires</p>
-                  <p className="text-[10px] text-[var(--text-muted)]">{expiresAt}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <Link
-            to="/broker"
-            className="flex items-center justify-between px-5 py-4 hover:bg-[var(--bg-card-hover)] transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              {isBrokerConnected ? (
-                <Wifi className="w-4 h-4 text-[var(--accent-emerald)]" />
-              ) : (
-                <WifiOff className="w-4 h-4 text-[var(--text-muted)]" />
-              )}
-              <div>
-                <p className="text-xs font-bold">Broker</p>
-                <p className="text-[10px] text-[var(--text-muted)]">
-                  {isBrokerConnected ? `${userData?.broker} — Connected` : 'Not connected'}
-                </p>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-[var(--text-muted)]" />
-          </Link>
-        </div>
+            <span className="text-xs text-slate-400 font-mono font-bold">30-Day Cycle</span>
+          </div>
+        )}
       </div>
 
-      {/* Sign Out */}
+      {/* Security Info Card */}
+      <div className="glass-panel p-5 rounded-3xl border-white/10 flex items-start gap-3">
+        <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Your account is secured via Investio's payment channel. Deposit confirmations and trade executions are logged in real time.
+        </p>
+      </div>
+
+      {/* Sign Out Action */}
       <button
         id="settings-logout-button"
         onClick={handleLogout}
-        className="btn-secondary !text-[var(--accent-rose)] group w-full"
+        className="w-full py-4 px-6 rounded-2xl bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 text-rose-400 font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
       >
         <LogOut className="w-4 h-4" />
-        Sign Out
+        <span>Sign Out From TradeBot</span>
       </button>
-
-      <p className="text-center text-[9px] text-[var(--text-muted)] opacity-50">
-        TradeBot v1.0.0 &bull; Powered by Investio
-      </p>
     </div>
   );
 }
