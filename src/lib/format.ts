@@ -61,3 +61,25 @@ export function daysLeft(expiresAt?: number | null): number {
   if (!expiresAt) return 0;
   return Math.max(0, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
 }
+
+/**
+ * "347 days left" is technically right for an annual plan and reads like
+ * noise. Collapse anything past a month or two into months.
+ */
+export function remainingLabel(expiresAt?: number | null): string {
+  const days = daysLeft(expiresAt);
+  if (days <= 0) return 'Expired';
+  if (days === 1) return '1 day left';
+  if (days < 45) return `${days} days left`;
+  const months = Math.round(days / 30.44);
+  return `${months} month${months === 1 ? '' : 's'} left`;
+}
+
+export function renewalDate(expiresAt?: number | null): string {
+  if (!expiresAt) return '—';
+  return new Date(expiresAt).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}

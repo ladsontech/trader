@@ -84,6 +84,7 @@ export interface PlanDef {
   id: "standard" | "premium";
   name: string;
   price: number; // UGX
+  /** How long one payment buys. Billing is annual. */
   durationDays: number;
   maxSymbols: number;
   symbols: string[];

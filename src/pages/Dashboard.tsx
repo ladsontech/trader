@@ -12,6 +12,7 @@ import {
 import { planById, STRATEGY_LABEL, TIMEFRAME_LABEL } from '../lib/constants';
 import {
   daysLeft,
+  remainingLabel,
   money,
   pairLabel,
   percent,
@@ -202,10 +203,8 @@ export default function Dashboard() {
               <span className="chip">{plan.name} plan</span>
               <span className="chip">{plan.pairs}</span>
               <span className="chip">{plan.riskPercent}% risk per trade</span>
-              <span
-                className={cx('chip', remaining <= 3 && 'border-warn/30 text-warn')}
-              >
-                {remaining} {remaining === 1 ? 'day' : 'days'} left
+              <span className={cx('chip', remaining <= 7 && 'border-warn/30 text-warn')}>
+                {remainingLabel(userData?.subscriptionExpiresAt)}
               </span>
             </div>
           </>

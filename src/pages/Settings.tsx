@@ -5,7 +5,7 @@ import { auth } from '../lib/firebase';
 import { useAuth } from '../lib/auth-context';
 import { apiErrorMessage, setBotEnabled } from '../lib/api';
 import { planById, STRATEGY_LABEL, TIMEFRAME_LABEL } from '../lib/constants';
-import { daysLeft, dateTime } from '../lib/format';
+import { remainingLabel, renewalDate } from '../lib/format';
 import { Button, Card, Notice, PageTitle, SectionTitle, cx } from '../components/ui';
 import { ArrowRight, LogOut, Pause, Play } from 'lucide-react';
 
@@ -15,7 +15,6 @@ export default function Settings() {
   const [error, setError] = useState('');
 
   const plan = planById(userData?.subscriptionPlan);
-  const remaining = daysLeft(userData?.subscriptionExpiresAt);
 
   const toggleBot = async () => {
     setToggling(true);
@@ -48,14 +47,14 @@ export default function Settings() {
           label="Subscription"
           value={
             isSubscribed
-              ? `${plan?.name ?? 'Active'} · ${remaining} ${remaining === 1 ? 'day' : 'days'} left`
+              ? `${plan?.name ?? 'Active'} · ${remainingLabel(userData?.subscriptionExpiresAt)}`
               : userData?.subscriptionStatus === 'expired'
                 ? 'Expired'
                 : 'None'
           }
         />
         {userData?.subscriptionExpiresAt ? (
-          <Row label="Renews before" value={dateTime(userData.subscriptionExpiresAt)} />
+          <Row label="Renews before" value={renewalDate(userData.subscriptionExpiresAt)} />
         ) : null}
 
         <div className="divider my-4" />

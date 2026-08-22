@@ -34,11 +34,23 @@ function Booting() {
  * payment webhook can mark one active.
  */
 function Gate({ children }: { children: React.ReactNode }) {
-  const { user, loading, isSubscribed, isBrokerConnected, hasSeenOnboarding } = useAuth();
+  const {
+    user,
+    loading,
+    profileLoaded,
+    isSubscribed,
+    isBrokerConnected,
+    hasSeenOnboarding,
+  } = useAuth();
   const location = useLocation();
 
   if (loading) return <Booting />;
   if (!user) return <Navigate to="/auth" replace />;
+
+  // Never route on a profile we have not actually read. Without this, a slow
+  // or failed read looks identical to "this user has not paid", and a paying
+  // customer gets thrown back to the paywall mid-session.
+  if (!profileLoaded) return <Booting />;
 
   const path = location.pathname;
 
@@ -46,11 +58,16 @@ function Gate({ children }: { children: React.ReactNode }) {
     return <Navigate to="/welcome" replace />;
   }
 
+  // Settings is always reachable — it is where the sign-out button lives, and
+  // trapping someone in a redirect loop with no way out is worse than showing
+  // them a page with a locked panel on it.
+  if (path === '/settings') return <>{children}</>;
+
   if (hasSeenOnboarding && !isSubscribed && path !== '/subscribe') {
     return <Navigate to="/subscribe" replace />;
   }
 
-  if (isSubscribed && !isBrokerConnected && path !== '/broker' && path !== '/settings') {
+  if (isSubscribed && !isBrokerConnected && path !== '/broker') {
     return <Navigate to="/broker" replace />;
   }
 

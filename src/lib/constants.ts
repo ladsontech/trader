@@ -32,7 +32,6 @@ export const PLANS: Plan[] = [
     riskPercent: 0.5,
     maxOpenPositions: 3,
     features: [
-      '1 full year access (365 days)',
       '3 major currency pairs',
       '0.5% equity risk per trade',
       'Up to 3 positions at once',
@@ -51,7 +50,6 @@ export const PLANS: Plan[] = [
     maxOpenPositions: 6,
     recommended: true,
     features: [
-      '1 full year access (365 days)',
       '8 instruments including gold (XAU/USD)',
       '1% equity risk per trade',
       'Up to 6 positions at once',

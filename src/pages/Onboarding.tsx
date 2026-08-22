@@ -86,9 +86,9 @@ export default function Onboarding() {
                 <ShieldCheck className="w-4 h-4 text-accent shrink-0 mt-0.5" />
                 <p className="text-[13px] text-ink-soft leading-relaxed">
                   Plans start at{' '}
-                  <span className="tnum text-ink font-semibold">{ugx(cheapest)}</span> for 30
-                  days. You pay by MTN or Airtel mobile money on the next screen, and the bot
-                  only starts once you connect your own broker account.
+                  <span className="tnum text-ink font-semibold">{ugx(cheapest)}</span> for a
+                  full year. You pay by MTN or Airtel mobile money on the next screen, and the
+                  bot only starts once you connect your own broker account.
                 </p>
               </div>
             )}

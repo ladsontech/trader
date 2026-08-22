@@ -64,10 +64,9 @@ export const tbInitiateSubscription = onCall(
       throw new HttpsError("unauthenticated", "Please sign in first.");
     }
     const uid = request.auth.uid;
-    const { planId, phoneNumber, forceNew } = (request.data || {}) as {
+    const { planId, phoneNumber } = (request.data || {}) as {
       planId?: string;
       phoneNumber?: string;
-      forceNew?: boolean;
     };
 
     const plan = planId ? PLANS[planId] : undefined;
@@ -84,15 +83,20 @@ export const tbInitiateSubscription = onCall(
     const formattedPhone = formatPhone(phoneNumber);
     const localPhone = normalizeUgandanPhone(phoneNumber);
 
+    // Reuse a live prompt instead of spamming the user's handset.
+    //
+    // This is a single document lookup by uid, NOT a compound query. A
+    // where(userId).where(status).orderBy(createdAt) query would need a
+    // composite index that does not exist on a fresh project, and Firestore
+    // would throw FAILED_PRECONDITION on the very first payment. Same reason
+    // Investio keeps an `active_deposits/{uid}` document.
     const activeRef = db.collection(COL.activePayments).doc(uid);
     const activeSnap = await activeRef.get();
 
-    // If user asked to force a new request or changed their number, bypass prompt reuse
-    if (activeSnap.exists && !forceNew) {
+    if (activeSnap.exists) {
       const active = activeSnap.data()!;
       const age = Date.now() - timestampToMillis(active.createdAt);
-      const isSamePhone = !active.phoneDigits || active.phoneDigits === localPhone;
-      if (active.status === "pending" && age < PROMPT_WINDOW_MS && active.reference && isSamePhone) {
+      if (active.status === "pending" && age < PROMPT_WINDOW_MS && active.reference) {
         return {
           success: true,
           reused: true,
@@ -100,7 +104,7 @@ export const tbInitiateSubscription = onCall(
           planId: active.planId as string,
           amount: Number(active.amount) || plan.price,
           message:
-            "A mobile money prompt is waiting on your phone. Enter your PIN or tap cancel below to change your number.",
+            "A mobile money prompt is already waiting on your phone. Enter your PIN to finish.",
         };
       }
     }
@@ -129,7 +133,6 @@ export const tbInitiateSubscription = onCall(
       reference,
       planId: plan.id,
       amount: plan.price,
-      phoneDigits: localPhone,
       status: "creating",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -535,17 +538,22 @@ export const tbCancelPayment = onCall(async (request) => {
  * ──────────────────────────────────────────────────────────────── */
 export async function expireLapsedSubscriptions(): Promise<number> {
   const now = Date.now();
+
+  // Single-field range filter only. Adding `.where("subscriptionStatus","==",
+  // "active")` would make this a composite query needing an index that does
+  // not exist on a fresh project — the query would throw, this would abort,
+  // and it is the first thing tbBotTick calls. Status is filtered in code.
   const snap = await db
     .collection(COL.users)
-    .where("subscriptionStatus", "==", "active")
     .where("subscriptionExpiresAt", "<=", now)
     .limit(400)
     .get();
 
-  if (snap.empty) return 0;
+  const lapsed = snap.docs.filter((doc) => doc.data().subscriptionStatus === "active");
+  if (lapsed.length === 0) return 0;
 
   const batch = db.batch();
-  snap.docs.forEach((doc) => {
+  lapsed.forEach((doc) => {
     batch.set(
       doc.ref,
       {
@@ -557,6 +565,6 @@ export async function expireLapsedSubscriptions(): Promise<number> {
     );
   });
   await batch.commit();
-  logInfo("Expired lapsed subscriptions", { count: snap.size });
-  return snap.size;
+  logInfo("Expired lapsed subscriptions", { count: lapsed.length });
+  return lapsed.length;
 }
