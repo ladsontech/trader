@@ -1,409 +1,399 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../lib/auth-context';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { db, app } from '../lib/firebase';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { PACKAGES } from '../lib/constants';
-import {
-  CheckCircle2,
-  Loader2,
-  XCircle,
-  Crown,
-  Sparkles,
-  Check,
-  Bot,
-  ArrowRight,
-  Wallet
-} from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from '../lib/auth-context';
+import { PLANS, planById } from '../lib/constants';
+import { checkPayment, initiateSubscription, apiErrorMessage } from '../lib/api';
+import { daysLeft, ugx } from '../lib/format';
+import { Button, Card, Field, Notice, PageTitle, cx } from '../components/ui';
+import { ArrowRight, Check, CheckCircle2, Smartphone, XCircle } from 'lucide-react';
 
-const functions = getFunctions(app);
-const pendingSubStorageKey = (uid: string) => `tradebot.pendingSub.${uid}`;
+type TxState = 'idle' | 'waiting' | 'completed' | 'failed';
+
+const pendingKey = (uid: string) => `tradebot.pendingPayment.${uid}`;
 
 export default function Subscribe() {
-  const { userData, user, refreshUserData } = useAuth();
-  const submittingRef = useRef(false);
-  const [selectedPlan, setSelectedPlan] = useState<string>('premium');
-  const [phoneNumber, setPhoneNumber] = useState(userData?.phoneDigits || '');
-  const [loading, setLoading] = useState(false);
+  const { user, userData, isSubscribed } = useAuth();
+  const [selected, setSelected] = useState<'standard' | 'premium'>('premium');
+  const [phone, setPhone] = useState(userData?.phoneDigits || '');
+  const [state, setState] = useState<TxState>('idle');
+  const [reference, setReference] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [txStatus, setTxStatus] = useState<'idle' | 'waiting' | 'completed' | 'failed'>('idle');
-  const [currentReference, setCurrentReference] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
-  const isSubscribed = userData?.subscriptionStatus === 'active';
+  const plan = PLANS.find((p) => p.id === selected)!;
 
-  // Restore pending subscription from localStorage
+  /* Restore a prompt the user walked away from. */
   useEffect(() => {
-    if (!user || currentReference) return;
-    const saved = localStorage.getItem(pendingSubStorageKey(user.uid));
+    if (!user || reference) return;
+    const saved = localStorage.getItem(pendingKey(user.uid));
     if (!saved) return;
     try {
-      const pending = JSON.parse(saved) as { reference?: string; plan?: string };
-      if (!pending.reference) {
-        localStorage.removeItem(pendingSubStorageKey(user.uid));
-        return;
-      }
-      setCurrentReference(pending.reference);
-      if (pending.plan) setSelectedPlan(pending.plan);
-      setTxStatus('waiting');
-      setLoading(true);
+      const parsed = JSON.parse(saved) as { reference?: string; planId?: 'standard' | 'premium' };
+      if (!parsed.reference) throw new Error('empty');
+      setReference(parsed.reference);
+      if (parsed.planId) setSelected(parsed.planId);
+      setState('waiting');
     } catch {
-      localStorage.removeItem(pendingSubStorageKey(user.uid));
+      localStorage.removeItem(pendingKey(user.uid));
     }
-  }, [user, currentReference]);
+  }, [user, reference]);
 
-  // Listen for real-time payment status via pending_transactions
-  useEffect(() => {
-    if (!currentReference) return;
-    const unsubscribe = onSnapshot(
-      doc(db, 'pending_transactions', currentReference),
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          if (data.status === 'completed') {
-            setTxStatus('completed');
-            setLoading(false);
-            if (user) localStorage.removeItem(pendingSubStorageKey(user.uid));
-            const plan = selectedPlan || 'standard';
-            const userRef = doc(db, 'tradebot_users', user!.uid);
-            updateDoc(userRef, {
-              subscriptionPlan: plan,
-              subscriptionStatus: 'active',
-              subscriptionExpiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-            }).then(() => refreshUserData());
-          } else if (data.status === 'failed') {
-            setTxStatus('failed');
-            setError(data.failureReason || 'Mobile money transaction was declined or timed out.');
-            setLoading(false);
-            if (user) localStorage.removeItem(pendingSubStorageKey(user.uid));
-          }
-        }
-      },
-      (snapshotError) => {
-        console.error('Subscription listener error:', snapshotError);
-        setError('Unable to monitor payment status. Please check your network.');
-        setLoading(false);
+  const settle = useCallback(
+    (status: 'completed' | 'failed', reason?: string | null) => {
+      if (user) localStorage.removeItem(pendingKey(user.uid));
+      setState(status);
+      if (status === 'failed') {
+        setError(reason || 'The payment did not go through.');
       }
+    },
+    [user]
+  );
+
+  /* Live status straight from our own ledger — written only by the server. */
+  useEffect(() => {
+    if (!reference || state !== 'waiting') return;
+    const unsubscribe = onSnapshot(
+      doc(db, 'tradebot_transactions', reference),
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        if (data.status === 'completed') settle('completed');
+        else if (data.status === 'failed') settle('failed', data.failureReason);
+      },
+      () => setNotice('Live updates paused — we are still checking your payment.')
     );
     return () => unsubscribe();
-  }, [currentReference, user, selectedPlan]);
+  }, [reference, state, settle]);
 
-  const handleSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !selectedPlan || submittingRef.current || txStatus === 'waiting') return;
+  /* Backstop poll in case the provider callback is late or the listener is blocked. */
+  useEffect(() => {
+    if (!reference || state !== 'waiting') return;
+    const timer = setInterval(async () => {
+      try {
+        const result = await checkPayment(reference);
+        if (result.status === 'completed') settle('completed');
+        else if (result.status === 'failed') settle('failed', result.failureReason);
+      } catch {
+        /* keep waiting */
+      }
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [reference, state, settle]);
 
-    const pkg = PACKAGES.find((p) => p.id === selectedPlan);
-    if (!pkg) return;
+  const pay = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submittingRef.current || state === 'waiting') return;
 
-    const cleanPhone = phoneNumber.replace(/\D/g, '');
-    if (cleanPhone.length < 9) {
-      setError('Please enter a valid mobile money number (e.g. 0770123456)');
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 9) {
+      setError('Enter the mobile money number to charge, for example 0770123456.');
       return;
     }
 
     submittingRef.current = true;
-    setLoading(true);
+    setSubmitting(true);
     setError('');
-    setTxStatus('waiting');
+    setNotice('');
 
     try {
-      const initiateDeposit = httpsCallable(functions, 'initiateDeposit');
-      const result = await initiateDeposit({
-        phoneNumber: cleanPhone,
-        amount: pkg.price,
-      });
-
-      const data = result.data as {
-        success: boolean;
-        reference: string;
-        reused?: boolean;
-        amount?: number;
-        phoneNumber?: string;
-        message?: string;
-      };
-
-      if (data.success) {
-        if (user) {
-          localStorage.setItem(
-            pendingSubStorageKey(user.uid),
-            JSON.stringify({ reference: data.reference, plan: selectedPlan })
-          );
-        }
-        setError(data.reused ? (data.message || 'An active mobile money prompt is pending on your phone.') : '');
-        setCurrentReference(data.reference);
-      } else {
-        setError('Failed to send mobile money prompt. Please try again.');
-        setLoading(false);
-        setTxStatus('failed');
+      const result = await initiateSubscription(plan.id, digits);
+      if (user) {
+        localStorage.setItem(
+          pendingKey(user.uid),
+          JSON.stringify({ reference: result.reference, planId: plan.id })
+        );
       }
-    } catch (err: any) {
-      console.error('Payment initiation error:', err);
-      setError(err.message || 'Failed to initiate payment. Please check your phone number.');
-      setLoading(false);
-      setTxStatus('failed');
+      setReference(result.reference);
+      setState('waiting');
+      if (result.reused && result.message) setNotice(result.message);
+    } catch (err) {
+      setState('failed');
+      setError(
+        apiErrorMessage(err, 'We could not send the payment prompt. Please try again.')
+      );
     } finally {
       submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
-  const resetForm = () => {
-    setTxStatus('idle');
-    setCurrentReference(null);
+  const reset = () => {
+    if (user) localStorage.removeItem(pendingKey(user.uid));
+    setState('idle');
+    setReference(null);
     setError('');
-    setLoading(false);
-    if (user) localStorage.removeItem(pendingSubStorageKey(user.uid));
+    setNotice('');
   };
 
-  return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      
-      {/* ── HEADER ── */}
-      <div className="space-y-1">
-        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          Select Your Package
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400">
-          Instant activation via Investio Mobile Money channel (MTN / Airtel).
-        </p>
-      </div>
+  /* ── Already subscribed ─────────────────────────────────────── */
+  if (isSubscribed && state !== 'completed') {
+    const active = planById(userData?.subscriptionPlan);
+    const remaining = daysLeft(userData?.subscriptionExpiresAt);
+    return (
+      <div className="max-w-2xl">
+        <PageTitle
+          title="Your plan"
+          subtitle="Renewals stack onto the time you have left, so paying early never costs you days."
+        />
 
-      {/* ── ALREADY SUBSCRIBED ── */}
-      {isSubscribed && (
-        <div className="p-6 sm:p-8 rounded-3xl bg-[#0F172A] border border-emerald-500/30 text-center space-y-4 shadow-sm">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
-            <CheckCircle2 className="w-8 h-8" />
-          </div>
-          <div>
-            <h2 className="text-xl font-black text-white">Active Plan: {userData?.subscriptionPlan === 'premium' ? 'VIP Premium' : 'Standard'}</h2>
-            <p className="text-xs text-emerald-300/80 mt-1">Your trading bot is enabled and executing trades on your connected broker.</p>
-          </div>
-          <Link
-            to="/broker"
-            className="inline-flex items-center gap-2 py-3 px-6 rounded-2xl bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-95 transition-all"
-          >
-            <span>Manage Broker Connection</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      )}
-
-      {/* ── PACKAGE CARDS (Vertical on mobile, side-by-side on tablet/desktop) ── */}
-      <div className="grid sm:grid-cols-2 gap-4">
-        
-        {/* Standard Package (50,000 UGX) */}
-        <div
-          onClick={() => txStatus !== 'waiting' && setSelectedPlan('standard')}
-          className={`p-5 sm:p-6 rounded-3xl border transition-all cursor-pointer relative flex flex-col justify-between ${
-            selectedPlan === 'standard'
-              ? 'border-emerald-400 bg-[#0F172A] shadow-md'
-              : 'border-white/[0.08] bg-[#0F172A]/70 hover:border-white/20'
-          }`}
-        >
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">
-                <Bot className="w-5 h-5" />
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-accent" />
+                <h2 className="text-[15px] font-semibold">{active?.name ?? 'Active'} plan</h2>
               </div>
-              <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-white/5 text-slate-400">
-                Standard
-              </span>
+              <p className="text-[13px] text-ink-soft mt-1">{active?.pairs}</p>
             </div>
-
-            <div>
-              <h3 className="text-base font-black text-white">Standard Bot Package</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">3 Major Pairs &bull; Exness & FBS</p>
-            </div>
-
-            <div>
-              <span className="text-2xl font-black text-white font-mono">UGX 50,000</span>
-              <span className="text-xs text-slate-400 font-semibold"> / month</span>
-            </div>
-
-            <ul className="space-y-2 text-xs text-slate-300">
-              <li className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Up to 3 major Forex currency pairs</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Exness & FBS broker execution</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Automated stop-loss & risk control</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Daily automated trade reports</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="mt-5 pt-3.5 border-t border-white/[0.05] flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400">Select Plan</span>
-            <div className={`w-5 h-5 rounded-full flex items-center justify-center ${selectedPlan === 'standard' ? 'bg-emerald-400 text-slate-950' : 'border border-white/20'}`}>
-              {selectedPlan === 'standard' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-            </div>
-          </div>
-        </div>
-
-        {/* Premium Package (100,000 UGX) */}
-        <div
-          onClick={() => txStatus !== 'waiting' && setSelectedPlan('premium')}
-          className={`p-5 sm:p-6 rounded-3xl border transition-all cursor-pointer relative flex flex-col justify-between overflow-hidden ${
-            selectedPlan === 'premium'
-              ? 'border-emerald-400 bg-gradient-to-br from-emerald-950/30 via-[#0F172A] to-[#0F172A] shadow-md'
-              : 'border-white/[0.08] bg-[#0F172A]/70 hover:border-white/20'
-          }`}
-        >
-          {/* Top VIP Badge */}
-          <div className="absolute top-0 right-0 px-3.5 py-1 rounded-bl-2xl bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-black text-[9px] uppercase tracking-wider flex items-center gap-1 shadow-sm">
-            <Sparkles className="w-3 h-3" /> Recommended
-          </div>
-
-          <div className="space-y-3.5">
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-                <Crown className="w-5 h-5 text-emerald-400" />
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-base font-black text-white">VIP Premium Package</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">All Forex Pairs + Gold (XAU/USD)</p>
-            </div>
-
-            <div>
-              <span className="text-2xl font-black text-emerald-400 font-mono">UGX 100,000</span>
-              <span className="text-xs text-slate-400 font-semibold"> / month</span>
-            </div>
-
-            <ul className="space-y-2 text-xs text-slate-200">
-              <li className="flex items-center gap-2 font-medium">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Unlimited Forex pairs + Gold (XAU/USD)</span>
-              </li>
-              <li className="flex items-center gap-2 font-medium">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Ultra low latency execution (18ms)</span>
-              </li>
-              <li className="flex items-center gap-2 font-medium">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Turbo multi-timeframe algorithm</span>
-              </li>
-              <li className="flex items-center gap-2 font-medium">
-                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Priority Exness & FBS direct execution</span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="mt-5 pt-3.5 border-t border-white/[0.05] flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-400">Select Plan</span>
-            <div className={`w-5 h-5 rounded-full flex items-center justify-center ${selectedPlan === 'premium' ? 'bg-emerald-400 text-slate-950' : 'border border-white/20'}`}>
-              {selectedPlan === 'premium' && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── PAYMENT FORM ── */}
-      <div className="p-5 sm:p-7 rounded-3xl bg-[#0F172A] border border-white/[0.08] space-y-5 shadow-sm">
-        
-        {/* Status Alerts */}
-        {txStatus === 'waiting' && (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 space-y-1.5 flex items-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-amber-400 shrink-0" />
-            <div>
-              <p className="text-xs font-bold">Waiting for Mobile Money PIN confirmation...</p>
-              <p className="text-[11px] text-amber-300/80">
-                Please approve the phone prompt for UGX {PACKAGES.find(p => p.id === selectedPlan)?.price.toLocaleString()}.
+            <div className="text-right">
+              <p className="tnum text-lg">{remaining}</p>
+              <p className="text-[11px] text-ink-faint">
+                {remaining === 1 ? 'day left' : 'days left'}
               </p>
             </div>
           </div>
-        )}
 
-        {txStatus === 'completed' && (
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <p className="text-xs font-bold">Payment Confirmed & Package Activated!</p>
-            </div>
-            <p className="text-[11px] text-emerald-300/80">
-              Your {selectedPlan === 'premium' ? 'VIP Premium' : 'Standard'} plan is now active.
-            </p>
-            <Link to="/broker" className="inline-block mt-1 text-xs font-black underline">
-              Proceed to Connect Broker &rarr;
-            </Link>
+          <div className="divider my-4" />
+
+          <Link to="/broker" className="btn btn-ghost w-full">
+            Manage broker connection
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </Card>
+
+        <div className="mt-8">
+          <p className="text-[13px] text-ink-soft mb-3">Renew or change plan</p>
+          <PlanGrid selected={selected} onSelect={setSelected} locked={false} />
+          <div className="mt-4">
+            <PayForm
+              phone={phone}
+              setPhone={setPhone}
+              amount={plan.price}
+              onSubmit={pay}
+              submitting={submitting}
+              disabled={false}
+            />
           </div>
+          {error && (
+            <div className="mt-3">
+              <Notice tone="error">{error}</Notice>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Payment succeeded ──────────────────────────────────────── */
+  if (state === 'completed') {
+    return (
+      <div className="max-w-md">
+        <Card className="p-6 text-center fade-up">
+          <div className="w-11 h-11 rounded-full bg-accent-soft text-accent flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <h2 className="text-[17px] font-semibold">Payment received</h2>
+          <p className="text-[13px] text-ink-soft mt-1.5 leading-relaxed">
+            Your {plan.name} plan is active for {plan.durationDays} days. One more step:
+            connect the broker account the bot should trade on.
+          </p>
+          <Link to="/broker" className="btn btn-primary w-full mt-5">
+            Connect my broker
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </Card>
+      </div>
+    );
+  }
+
+  /* ── Choose and pay ─────────────────────────────────────────── */
+  return (
+    <div className="max-w-2xl">
+      <PageTitle
+        title="Choose your plan"
+        subtitle="Pay once for 30 days by MTN or Airtel mobile money. The bot starts after you connect your broker."
+      />
+
+      <PlanGrid selected={selected} onSelect={setSelected} locked={state === 'waiting'} />
+
+      <div className="mt-5 space-y-3">
+        {state === 'waiting' && (
+          <Notice tone="warn" title="Check your phone">
+            Approve the {ugx(plan.price)} request with your mobile money PIN. This page
+            updates itself the moment it clears — no need to refresh.
+          </Notice>
         )}
 
-        {txStatus === 'failed' && error && (
-          <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <XCircle className="w-4 h-4 text-rose-400" />
-              <p className="text-xs font-bold">Payment Unsuccessful</p>
-            </div>
-            <p className="text-[11px] text-rose-300/80">{error}</p>
-            <button onClick={resetForm} className="text-xs font-bold underline cursor-pointer">
-              Try Again
+        {notice && <Notice tone="info">{notice}</Notice>}
+
+        {state === 'failed' && error && (
+          <Notice tone="error" title="Payment not completed">
+            <p>{error}</p>
+            <button onClick={reset} className="mt-1.5 font-semibold underline cursor-pointer">
+              Try again
             </button>
-          </div>
+          </Notice>
         )}
 
-        {/* Payment Form Inputs */}
-        {(txStatus === 'idle' || txStatus === 'waiting') && (
-          <form onSubmit={handleSubscribe} className="space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-white/[0.05]">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Total:</span>
-              <span className="text-xl font-black text-emerald-400 font-mono">
-                UGX {PACKAGES.find(p => p.id === selectedPlan)?.price.toLocaleString()}
+        {state !== 'failed' && error && <Notice tone="error">{error}</Notice>}
+
+        {state !== 'failed' && (
+          <PayForm
+            phone={phone}
+            setPhone={setPhone}
+            amount={plan.price}
+            onSubmit={pay}
+            submitting={submitting}
+            disabled={state === 'waiting'}
+          />
+        )}
+      </div>
+
+      <p className="mt-5 text-[11px] text-ink-faint leading-relaxed">
+        Payments are collected through the Investio mobile money channel. Your subscription is
+        activated by our payment server once the provider confirms the transaction.
+      </p>
+    </div>
+  );
+}
+
+/* ── Pieces ───────────────────────────────────────────────────── */
+
+function PlanGrid({
+  selected,
+  onSelect,
+  locked,
+}: {
+  selected: string;
+  onSelect: (id: 'standard' | 'premium') => void;
+  locked: boolean;
+}) {
+  return (
+    <div className="grid sm:grid-cols-2 gap-3">
+      {PLANS.map((p) => {
+        const active = selected === p.id;
+        return (
+          <button
+            key={p.id}
+            type="button"
+            disabled={locked}
+            onClick={() => onSelect(p.id)}
+            className={cx(
+              'text-left p-4 rounded-[14px] border transition-colors cursor-pointer disabled:cursor-not-allowed',
+              active
+                ? 'border-accent/50 bg-accent/[0.04]'
+                : 'border-line bg-surface hover:border-line-strong'
+            )}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[15px] font-semibold">{p.name}</h3>
+                  {p.recommended && (
+                    <span className="chip border-accent/30 text-accent">Most popular</span>
+                  )}
+                </div>
+                <p className="text-[12px] text-ink-faint mt-0.5">{p.tagline}</p>
+              </div>
+              <span
+                className={cx(
+                  'w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center border',
+                  active ? 'bg-accent border-accent text-canvas' : 'border-line-strong'
+                )}
+              >
+                {active && <Check className="w-3 h-3" strokeWidth={3} />}
               </span>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-300">
-                Mobile Money Number (MTN / Airtel)
-              </label>
-              <div className="relative flex items-center">
-                <div className="absolute left-3.5 flex items-center gap-1.5 pointer-events-none text-slate-400 font-mono text-xs border-r border-white/10 pr-2.5">
-                  <span>🇺🇬</span>
-                  <span className="font-bold text-slate-300">+256</span>
-                </div>
-                <input
-                  id="subscribe-phone-input"
-                  type="tel"
-                  required
-                  placeholder="770 123 456"
-                  disabled={txStatus === 'waiting'}
-                  className="w-full pl-24 pr-4 py-3.5 bg-slate-950/70 border border-white/10 rounded-2xl text-white font-mono text-sm font-semibold focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all placeholder:text-slate-600 disabled:opacity-50"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                />
-              </div>
-            </div>
+            <p className="tnum text-[22px] mt-3">
+              {ugx(p.price)}
+              <span className="font-sans text-[12px] text-ink-faint"> / 30 days</span>
+            </p>
 
-            <button
-              id="subscribe-submit-button"
-              type="submit"
-              disabled={loading || txStatus === 'waiting'}
-              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/20 hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Sending Mobile Money Prompt...</span>
-                </>
-              ) : (
-                <>
-                  <Wallet className="w-4 h-4" />
-                  <span>Pay UGX {PACKAGES.find(p => p.id === selectedPlan)?.price.toLocaleString()} via Investio</span>
-                </>
-              )}
-            </button>
-          </form>
-        )}
-      </div>
+            <ul className="mt-3 space-y-1.5">
+              {p.features.map((f) => (
+                <li key={f} className="flex items-start gap-2 text-[12.5px] text-ink-soft">
+                  <Check className="w-3 h-3 text-accent shrink-0 mt-1" strokeWidth={3} />
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+          </button>
+        );
+      })}
     </div>
+  );
+}
+
+function PayForm({
+  phone,
+  setPhone,
+  amount,
+  onSubmit,
+  submitting,
+  disabled,
+}: {
+  phone: string;
+  setPhone: (v: string) => void;
+  amount: number;
+  onSubmit: (e: React.FormEvent) => void;
+  submitting: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <Card className="p-4">
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Field
+          label="Mobile money number"
+          help="MTN or Airtel. The PIN prompt goes to this number."
+        >
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-ink-faint tnum pointer-events-none border-r border-line pr-2.5">
+              +256
+            </span>
+            <input
+              id="subscribe-phone"
+              type="tel"
+              inputMode="numeric"
+              required
+              disabled={disabled}
+              placeholder="770 123 456"
+              className="field tnum pl-[74px]"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+        </Field>
+
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-[13px] text-ink-soft">Total today</span>
+          <span className="tnum text-[15px] font-semibold">{ugx(amount)}</span>
+        </div>
+
+        <Button
+          id="subscribe-submit"
+          type="submit"
+          block
+          loading={submitting}
+          disabled={disabled}
+        >
+          {disabled ? (
+            <>
+              <XCircle className="w-4 h-4" />
+              Waiting for your PIN
+            </>
+          ) : (
+            <>
+              <Smartphone className="w-4 h-4" />
+              Send payment request
+            </>
+          )}
+        </Button>
+      </form>
+    </Card>
   );
 }

@@ -1,0 +1,90 @@
+// ─────────────────────────────────────────────────────────────────────────
+// TradeBot Firestore rules — the block that now lives in
+// investio/firestore.rules (applied 2026-08-22).
+//
+// Kept here as a reference copy. Rules are project-wide, so TradeBot's
+// firebase.json deliberately declares no "firestore" key: deploying TradeBot
+// can never overwrite Investio's rules.
+//
+// To deploy rules, do it from the investio folder as usual:
+//     firebase deploy --only firestore:rules
+//
+// WHY THIS EXISTS
+// The previous rule allowed `update` on tradebot_users by the owner with no
+// field restriction, so any signed-in user could run this in the console:
+//
+//     updateDoc(doc(db, 'tradebot_users', myUid), {
+//       subscriptionStatus: 'active',
+//       subscriptionExpiresAt: Date.now() + 1e12,
+//     })
+//
+// …and get the bot free. Cloud Functions use the Admin SDK and bypass rules,
+// so activation still works — only the browser is locked out.
+// ─────────────────────────────────────────────────────────────────────────
+
+    // ── TradeBot helpers ────────────────────────────────
+    function tbOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function tbOwnsDoc() {
+      return request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    // The only fields a browser may change on its own TradeBot profile.
+    // Subscription, broker and bot state are written by Cloud Functions,
+    // which use the Admin SDK and bypass these rules entirely.
+    function tbClientWritableOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['onboardedAt', 'phoneDigits', 'updatedAt']);
+    }
+
+    // ── TradeBot Users ──────────────────────────────────
+    match /tradebot_users/{userId} {
+      allow read: if isAdmin() || tbOwner(userId);
+
+      // A fresh profile only — never one that arrives pre-subscribed.
+      allow create: if tbOwner(userId)
+        && request.resource.data.get('subscriptionStatus', 'none') == 'none'
+        && !('subscriptionPlan' in request.resource.data.keys())
+        && request.resource.data.get('brokerConnected', false) == false;
+
+      allow update: if tbOwner(userId) && tbClientWritableOnly();
+
+      allow delete: if isAdmin();
+    }
+
+    // ── TradeBot Transactions ───────────────────────────
+    // TradeBot's own payment ledger. Deliberately separate from
+    // pending_transactions so subscription payments never credit an
+    // Investio wallet balance or trigger referral commission.
+    match /tradebot_transactions/{reference} {
+      allow read: if isAdmin() || tbOwnsDoc();
+      allow write: if false;
+    }
+
+    // ── TradeBot Subscriptions ──────────────────────────
+    match /tradebot_subscriptions/{subId} {
+      allow read: if isAdmin() || tbOwnsDoc();
+      allow write: if false;
+    }
+
+    // ── TradeBot Broker Connections ─────────────────────
+    // Holds the encrypted MT5 password and MetaApi account id.
+    // No client, not even the owner, may read or write this.
+    match /tradebot_broker_connections/{userId} {
+      allow read, write: if false;
+    }
+
+    // ── TradeBot Trades ─────────────────────────────────
+    match /tradebot_trades/{tradeId} {
+      allow read: if isAdmin() || tbOwnsDoc();
+      allow write: if false;
+    }
+
+    // ── TradeBot Bot Runs ───────────────────────────────
+    match /tradebot_bot_runs/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+

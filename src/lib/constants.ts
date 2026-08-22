@@ -1,103 +1,195 @@
-export interface TradeBotPackage {
-  id: string;
+/**
+ * Client-side copies of catalogue data.
+ *
+ * Prices here are for DISPLAY ONLY — the amount actually charged is read
+ * from the server's own PLANS table in functions/src/config.ts, so editing
+ * this file cannot change what anybody pays.
+ */
+
+export type PlanId = 'standard' | 'premium';
+
+export interface Plan {
+  id: PlanId;
   name: string;
+  tagline: string;
   price: number;
-  badge: string;
+  durationDays: number;
+  pairs: string;
+  riskPercent: number;
+  maxOpenPositions: number;
   features: string[];
   recommended?: boolean;
 }
 
-export const PACKAGES: TradeBotPackage[] = [
+export const PLANS: Plan[] = [
   {
     id: 'standard',
-    name: 'Standard Bot',
+    name: 'Standard',
+    tagline: 'The three majors, traded carefully.',
     price: 50000,
-    badge: 'STANDARD',
+    durationDays: 30,
+    pairs: 'EUR/USD · GBP/USD · USD/JPY',
+    riskPercent: 0.5,
+    maxOpenPositions: 3,
     features: [
-      'Access to the trading bot',
-      'Exness & FBS broker support',
-      'Up to 3 currency pairs',
-      'Basic risk management',
-      'Daily trade reports',
+      '3 major currency pairs',
+      '0.5% equity risk per trade',
+      'Up to 3 positions at once',
+      'Stop loss and take profit on every order',
+      'Full trade history from your broker',
     ],
   },
   {
     id: 'premium',
-    name: 'Premium Bot',
+    name: 'Premium',
+    tagline: 'Every pair the bot trades, including gold.',
     price: 100000,
-    badge: 'PREMIUM',
+    durationDays: 30,
+    pairs: '7 forex pairs + XAU/USD',
+    riskPercent: 1,
+    maxOpenPositions: 6,
     recommended: true,
     features: [
+      '8 instruments including gold (XAU/USD)',
+      '1% equity risk per trade',
+      'Up to 6 positions at once',
+      'Priority execution slot each cycle',
       'Everything in Standard',
-      'Unlimited currency pairs',
-      'Advanced risk management',
-      'Priority trade execution',
-      'Real-time notifications',
-      'Dedicated support',
     ],
   },
 ];
 
-export interface BrokerConfig {
-  id: string;
-  name: string;
-  logo: string;
-  color: string;
-  description: string;
-  fields: { key: string; label: string; placeholder: string; type: string }[];
+export function planById(id?: string | null): Plan | undefined {
+  return PLANS.find((p) => p.id === id);
 }
 
-export const BROKERS: BrokerConfig[] = [
+/* ── Brokers ──────────────────────────────────────────────────── */
+
+export interface BrokerField {
+  key: 'accountId' | 'password' | 'server';
+  label: string;
+  placeholder: string;
+  type: 'text' | 'password';
+  help?: string;
+}
+
+export interface Broker {
+  id: 'exness' | 'fbs';
+  name: string;
+  mark: string;
+  tint: string;
+  blurb: string;
+  serverExample: string;
+  fields: BrokerField[];
+}
+
+const commonFields = (serverExample: string, accountLabel: string): BrokerField[] => [
+  {
+    key: 'accountId',
+    label: accountLabel,
+    placeholder: '12345678',
+    type: 'text',
+    help: 'The number shown at the top of your MetaTrader 5 terminal.',
+  },
+  {
+    key: 'password',
+    label: 'MT5 password',
+    placeholder: '••••••••',
+    type: 'password',
+    help: 'Use your main trading password. An investor (read-only) password cannot place orders.',
+  },
+  {
+    key: 'server',
+    label: 'Server',
+    placeholder: serverExample,
+    type: 'text',
+    help: 'Copy it exactly as MetaTrader shows it — spelling and numbers must match.',
+  },
+];
+
+export const BROKERS: Broker[] = [
   {
     id: 'exness',
     name: 'Exness',
-    logo: 'E',
-    color: '#FBBF24',
-    description: 'Trade Forex, metals, crypto and more with tight spreads.',
-    fields: [
-      { key: 'accountId', label: 'Account ID', placeholder: 'e.g. 12345678', type: 'text' },
-      { key: 'apiPassword', label: 'API Password', placeholder: 'Your investor/API password', type: 'password' },
-      { key: 'server', label: 'Server', placeholder: 'e.g. Exness-Real9', type: 'text' },
-    ],
+    mark: 'E',
+    tint: '#f5c451',
+    blurb: 'MT5 real and demo accounts.',
+    serverExample: 'Exness-Real9',
+    fields: commonFields('Exness-Real9', 'Account number'),
   },
   {
     id: 'fbs',
     name: 'FBS',
-    logo: 'F',
-    color: '#22D3EE',
-    description: 'Global forex broker with competitive trading conditions.',
-    fields: [
-      { key: 'accountId', label: 'Account Number', placeholder: 'e.g. 87654321', type: 'text' },
-      { key: 'apiPassword', label: 'Trading Password', placeholder: 'Your trading password', type: 'password' },
-      { key: 'server', label: 'Server', placeholder: 'e.g. FBS-Real-14', type: 'text' },
+    mark: 'F',
+    tint: '#5aa9f5',
+    blurb: 'MT5 real and demo accounts.',
+    serverExample: 'FBS-Real-14',
+    fields: commonFields('FBS-Real-14', 'Account number'),
+  },
+];
+
+/* ── Onboarding ───────────────────────────────────────────────── */
+
+export interface OnboardingSlide {
+  key: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  points: string[];
+}
+
+export const ONBOARDING: OnboardingSlide[] = [
+  {
+    key: 'what',
+    eyebrow: 'What this is',
+    title: 'A trading bot that runs on your own broker account',
+    body:
+      'Your money never leaves your broker. TradeBot connects to your Exness or FBS MT5 account and places orders there — you keep full control, and you can withdraw any time.',
+    points: [
+      'Your funds stay with your broker',
+      'Every order is visible in your own MT5 terminal',
+      'Disconnect in one tap, whenever you want',
+    ],
+  },
+  {
+    key: 'how',
+    eyebrow: 'How it trades',
+    title: 'One rule set, applied without emotion',
+    body:
+      'The bot checks the 15-minute chart every quarter hour. It only enters when the trend and the pullback agree, and every single order carries a stop loss and a take profit before it is sent.',
+    points: [
+      'EMA trend filter + RSI pullback trigger',
+      'ATR-sized stop loss on every position',
+      'Most cycles it does nothing — that is the point',
+    ],
+  },
+  {
+    key: 'risk',
+    eyebrow: 'Risk first',
+    title: 'Limits it cannot talk itself out of',
+    body:
+      'Position size is calculated from your account equity, not guessed. If the day goes badly the bot stops itself before the damage compounds.',
+    points: [
+      '0.5–1% of equity risked per trade',
+      'Daily loss limit halts trading for the day',
+      'Hard cap on lot size and open positions',
+    ],
+  },
+  {
+    key: 'honest',
+    eyebrow: 'Before you pay',
+    title: 'Trading can lose money',
+    body:
+      'This is an automated strategy, not a guarantee. Leveraged forex carries real risk and past results never promise future ones. Start on a demo account if you want to watch it work first.',
+    points: [
+      'Works with MT5 demo accounts too',
+      'Cancel by simply not renewing',
+      'You can pause the bot at any moment',
     ],
   },
 ];
 
-export const TRADING_PAIRS = [
-  { symbol: 'EURUSD', name: 'EUR/USD', category: 'Major' },
-  { symbol: 'GBPUSD', name: 'GBP/USD', category: 'Major' },
-  { symbol: 'USDJPY', name: 'USD/JPY', category: 'Major' },
-  { symbol: 'AUDUSD', name: 'AUD/USD', category: 'Major' },
-  { symbol: 'USDCAD', name: 'USD/CAD', category: 'Major' },
-  { symbol: 'XAUUSD', name: 'XAU/USD', category: 'Metal' },
-  { symbol: 'GBPJPY', name: 'GBP/JPY', category: 'Cross' },
-  { symbol: 'EURJPY', name: 'EUR/JPY', category: 'Cross' },
-];
+/* ── Display helpers ──────────────────────────────────────────── */
 
-export type TradeDirection = 'BUY' | 'SELL';
-export type TradeStatus = 'open' | 'closed' | 'pending';
-
-export interface Trade {
-  id: string;
-  pair: string;
-  direction: TradeDirection;
-  lotSize: number;
-  entryPrice: number;
-  currentPrice?: number;
-  exitPrice?: number;
-  pnl: number;
-  status: TradeStatus;
-  openedAt: number;
-  closedAt?: number;
-}
+export const TIMEFRAME_LABEL = '15-minute chart';
+export const STRATEGY_LABEL = 'EMA Pullback Trend';

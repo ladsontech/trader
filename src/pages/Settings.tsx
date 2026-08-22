@@ -1,158 +1,163 @@
-import { useAuth } from '../lib/auth-context';
+import { useState } from 'react';
+import { Link } from 'react-router';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
-import {
-  User,
-  Plug,
-  LogOut,
-  Calendar,
-  ChevronRight,
-  ShieldCheck,
-  Zap,
-} from 'lucide-react';
-import { Link } from 'react-router';
+import { useAuth } from '../lib/auth-context';
+import { apiErrorMessage, setBotEnabled } from '../lib/api';
+import { planById, STRATEGY_LABEL, TIMEFRAME_LABEL } from '../lib/constants';
+import { daysLeft, dateTime } from '../lib/format';
+import { Button, Card, Notice, PageTitle, SectionTitle, cx } from '../components/ui';
+import { ArrowRight, LogOut, Pause, Play } from 'lucide-react';
 
 export default function Settings() {
-  const { userData, user } = useAuth();
+  const { user, userData, isSubscribed, isBrokerConnected, refreshUserData } = useAuth();
+  const [toggling, setToggling] = useState(false);
+  const [error, setError] = useState('');
 
-  const isSubscribed = userData?.subscriptionStatus === 'active';
-  const isBrokerConnected = userData?.brokerConnected === true;
+  const plan = planById(userData?.subscriptionPlan);
+  const remaining = daysLeft(userData?.subscriptionExpiresAt);
 
-  const handleLogout = () => {
-    signOut(auth);
+  const toggleBot = async () => {
+    setToggling(true);
+    setError('');
+    try {
+      await setBotEnabled(!userData?.botEnabled);
+      await refreshUserData();
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Could not change the bot setting.'));
+    } finally {
+      setToggling(false);
+    }
   };
 
-  const phoneDisplay = userData?.phoneDigits || user?.email?.split('@')[0] || 'Trader';
-  const planName = userData?.subscriptionPlan === 'premium' ? 'VIP Premium Plan' : userData?.subscriptionPlan === 'standard' ? 'Standard Plan' : 'No Active Plan';
-
-  const expiresAt = userData?.subscriptionExpiresAt
-    ? new Date(userData.subscriptionExpiresAt).toLocaleDateString([], {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-    : 'N/A';
-
   return (
-    <div className="max-w-xl mx-auto space-y-6 sm:space-y-8 animate-slide-in">
-      
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          Account Settings
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400 mt-1">
-          Manage your subscription, broker connections, and profile.
-        </p>
-      </div>
+    <div className="max-w-2xl">
+      <PageTitle title="Settings" />
 
-      {/* User Profile Card */}
-      <div className="glass-panel p-6 rounded-3xl border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-400 to-cyan-400 p-0.5 shadow-lg shadow-emerald-500/10">
-            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-emerald-400">
-              <User className="w-6 h-6" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-base font-black text-white">🇺🇬 {phoneDisplay}</span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-400">
-                Trader
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">Investio Channel Authenticated</p>
-          </div>
+      {error && (
+        <div className="mb-4">
+          <Notice tone="error">{error}</Notice>
         </div>
-      </div>
+      )}
 
-      {/* Settings Navigation List */}
-      <div className="glass-panel rounded-3xl border-white/10 overflow-hidden divide-y divide-white/5">
-        
-        {/* Subscription Item */}
-        <Link
-          to="/subscribe"
-          className="p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-              <Zap className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-white">Subscription Package</div>
-              <div className="text-xs text-slate-400 mt-0.5">{planName}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-              isSubscribed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-            }`}>
-              {isSubscribed ? 'Active' : 'Expired'}
-            </span>
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </div>
+      {/* Account */}
+      <Card className="p-5">
+        <SectionTitle title="Account" />
+        <Row label="Phone number" value={userData?.phoneDigits || user?.email?.split('@')[0] || '—'} />
+        <Row
+          label="Subscription"
+          value={
+            isSubscribed
+              ? `${plan?.name ?? 'Active'} · ${remaining} ${remaining === 1 ? 'day' : 'days'} left`
+              : userData?.subscriptionStatus === 'expired'
+                ? 'Expired'
+                : 'None'
+          }
+        />
+        {userData?.subscriptionExpiresAt ? (
+          <Row label="Renews before" value={dateTime(userData.subscriptionExpiresAt)} />
+        ) : null}
+
+        <div className="divider my-4" />
+        <Link to="/subscribe" className="btn btn-ghost w-full">
+          {isSubscribed ? 'Renew or change plan' : 'Choose a plan'}
+          <ArrowRight className="w-4 h-4" />
         </Link>
+      </Card>
 
-        {/* Broker Item */}
-        <Link
-          to="/broker"
-          className="p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
-              <Plug className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-white">Connected Broker</div>
-              <div className="text-xs text-slate-400 mt-0.5">
-                {isBrokerConnected ? `${userData?.broker} (MT4/MT5)` : 'No broker linked'}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-              isBrokerConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
-            }`}>
-              {isBrokerConnected ? 'Linked' : 'Not Linked'}
-            </span>
-            <ChevronRight className="w-4 h-4 text-slate-500" />
-          </div>
-        </Link>
+      {/* Bot */}
+      <Card className="p-5 mt-4">
+        <SectionTitle
+          title="Trading bot"
+          subtitle={`${STRATEGY_LABEL} · ${TIMEFRAME_LABEL}`}
+        />
 
-        {/* Expiry Date (if subscribed) */}
-        {isSubscribed && (
-          <div className="p-5 flex items-center justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-white">Subscription Renewal</div>
-                <div className="text-xs text-slate-400 mt-0.5">{expiresAt}</div>
-              </div>
-            </div>
-            <span className="text-xs text-slate-400 font-mono font-bold">30-Day Cycle</span>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-[13.5px]">
+              {userData?.botEnabled ? 'Running' : 'Paused'}
+            </p>
+            <p className="text-[12px] text-ink-faint mt-0.5 leading-relaxed">
+              Pausing stops new orders. Positions already open stay open and keep their stop
+              loss and take profit.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            loading={toggling}
+            onClick={toggleBot}
+            disabled={!isBrokerConnected}
+            className="shrink-0"
+          >
+            {userData?.botEnabled ? (
+              <>
+                <Pause className="w-4 h-4" /> Pause
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4" /> Resume
+              </>
+            )}
+          </Button>
+        </div>
+
+        {!isBrokerConnected && (
+          <div className="mt-4">
+            <Notice tone="info">
+              Connect a broker account before the bot can run.{' '}
+              <Link to="/broker" className="font-semibold underline">
+                Connect now
+              </Link>
+            </Notice>
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* Security Info Card */}
-      <div className="glass-panel p-5 rounded-3xl border-white/10 flex items-start gap-3">
-        <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-        <p className="text-xs text-slate-400 leading-relaxed">
-          Your account is secured via Investio's payment channel. Deposit confirmations and trade executions are logged in real time.
+      {/* Broker */}
+      <Card className="p-5 mt-4">
+        <SectionTitle title="Broker" />
+        <Row label="Broker" value={userData?.broker || 'Not connected'} />
+        <Row label="Account" value={userData?.brokerAccountId || '—'} />
+        <Row label="Server" value={userData?.brokerServer || '—'} />
+
+        <div className="divider my-4" />
+        <Link to="/broker" className="btn btn-ghost w-full">
+          {isBrokerConnected ? 'Manage connection' : 'Connect a broker'}
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+      </Card>
+
+      {/* Risk disclosure */}
+      <Card className="p-5 mt-4" quiet>
+        <SectionTitle title="Risk disclosure" />
+        <p className="text-[12.5px] text-ink-soft leading-relaxed">
+          TradeBot places orders on a broker account that belongs to you. Trading leveraged
+          forex can lose money, including more than you intended on a fast market. Past
+          performance never guarantees future results. Only trade with money you can afford
+          to lose, and consider testing on a demo account first.
         </p>
-      </div>
+      </Card>
 
-      {/* Sign Out Action */}
-      <button
-        id="settings-logout-button"
-        onClick={handleLogout}
-        className="w-full py-4 px-6 rounded-2xl bg-rose-500/10 hover:bg-rose-500/15 border border-rose-500/20 text-rose-400 font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-      >
-        <LogOut className="w-4 h-4" />
-        <span>Sign Out From TradeBot</span>
-      </button>
+      <div className="mt-4">
+        <Button
+          variant="ghost"
+          block
+          onClick={() => signOut(auth)}
+          className={cx('text-ink-soft')}
+        >
+          <LogOut className="w-4 h-4" />
+          Sign out
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2 text-[13.5px]">
+      <span className="text-ink-soft">{label}</span>
+      <span className="tnum text-ink text-right">{value}</span>
     </div>
   );
 }

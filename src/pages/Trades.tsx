@@ -1,142 +1,266 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  ArrowUpRight,
-  ArrowDownRight,
-} from 'lucide-react';
-import type { Trade } from '../lib/constants';
+  apiErrorMessage,
+  closePosition,
+  getTrades,
+  type TradesResult,
+} from '../lib/api';
+import { useAuth } from '../lib/auth-context';
+import {
+  dateTime,
+  money,
+  pairLabel,
+  percent,
+  price,
+  signedMoney,
+  timeAgo,
+} from '../lib/format';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Notice,
+  PageTitle,
+  Spinner,
+  Stat,
+  cx,
+} from '../components/ui';
+import { BarChart3, RefreshCw, X } from 'lucide-react';
 
-const ALL_TRADES: Trade[] = [
-  { id: 't1', pair: 'EUR/USD', direction: 'BUY', lotSize: 0.05, entryPrice: 1.0842, currentPrice: 1.0874, pnl: 16.00, status: 'open', openedAt: Date.now() - 3600000 },
-  { id: 't2', pair: 'XAU/USD (Gold)', direction: 'BUY', lotSize: 0.02, entryPrice: 2898.50, currentPrice: 2914.80, pnl: 32.60, status: 'open', openedAt: Date.now() - 7200000 },
-  { id: 't3', pair: 'GBP/USD', direction: 'SELL', lotSize: 0.04, entryPrice: 1.2740, currentPrice: 1.2715, pnl: 10.00, status: 'open', openedAt: Date.now() - 10800000 },
-  { id: 't4', pair: 'USD/JPY', direction: 'SELL', lotSize: 0.03, entryPrice: 154.80, exitPrice: 154.20, pnl: 18.00, status: 'closed', openedAt: Date.now() - 86400000, closedAt: Date.now() - 43200000 },
-  { id: 't5', pair: 'GBP/JPY', direction: 'BUY', lotSize: 0.04, entryPrice: 195.10, exitPrice: 196.45, pnl: 27.00, status: 'closed', openedAt: Date.now() - 172800000, closedAt: Date.now() - 86400000 },
-  { id: 't6', pair: 'AUD/USD', direction: 'BUY', lotSize: 0.03, entryPrice: 0.6520, exitPrice: 0.6565, pnl: 13.50, status: 'closed', openedAt: Date.now() - 259200000, closedAt: Date.now() - 172800000 },
-  { id: 't7', pair: 'USD/CAD', direction: 'SELL', lotSize: 0.04, entryPrice: 1.3640, exitPrice: 1.3590, pnl: 15.00, status: 'closed', openedAt: Date.now() - 345600000, closedAt: Date.now() - 259200000 },
-  { id: 't8', pair: 'NZD/USD', direction: 'BUY', lotSize: 0.02, entryPrice: 0.5910, exitPrice: 0.5895, pnl: -3.00, status: 'closed', openedAt: Date.now() - 432000000, closedAt: Date.now() - 345600000 },
-];
-
-type TradeFilter = 'all' | 'open' | 'closed';
+type Filter = 'open' | 'closed';
 
 export default function Trades() {
-  const [filter, setFilter] = useState<TradeFilter>('all');
+  const { userData } = useAuth();
+  const [data, setData] = useState<TradesResult | null>(null);
+  const [filter, setFilter] = useState<Filter>('open');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [closingId, setClosingId] = useState<string | null>(null);
 
-  const filteredTrades = ALL_TRADES.filter((t) => {
-    if (filter === 'all') return true;
-    return t.status === filter;
-  });
+  const currency = userData?.brokerCurrency || 'USD';
 
-  const openCount = ALL_TRADES.filter((t) => t.status === 'open').length;
-  const closedCount = ALL_TRADES.filter((t) => t.status === 'closed').length;
-  const totalPnl = ALL_TRADES.reduce((sum, t) => sum + t.pnl, 0);
+  const load = useCallback(async (silent = false) => {
+    silent ? setRefreshing(true) : setLoading(true);
+    setError('');
+    try {
+      setData(await getTrades(90));
+    } catch (err) {
+      setError(
+        apiErrorMessage(err, 'Could not load your trades from the broker right now.')
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-  const formatDate = (ms: number) => {
-    return new Date(ms).toLocaleDateString([], {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleClose = async (positionId: string) => {
+    setClosingId(positionId);
+    setError('');
+    try {
+      await closePosition(positionId);
+      await load(true);
+    } catch (err) {
+      setError(apiErrorMessage(err, 'The broker rejected the close request.'));
+    } finally {
+      setClosingId(null);
+    }
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl">
+        <Spinner label="Loading your trade history" />
+      </div>
+    );
+  }
+
+  const stats = data?.stats;
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      
-      {/* ── HEADER ── */}
-      <div className="space-y-1">
-        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          Trades & Execution Feed
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-400">
-          All algorithmic orders placed by the bot on your connected broker.
-        </p>
+    <div className="max-w-4xl">
+      <div className="flex items-start justify-between gap-4">
+        <PageTitle
+          title="Trades"
+          subtitle="Every order the bot placed on your broker account, read back from the broker itself."
+        />
+        <button
+          onClick={() => load(true)}
+          disabled={refreshing}
+          className="btn btn-ghost px-3 py-2 shrink-0"
+          aria-label="Refresh"
+        >
+          <RefreshCw className={cx('w-4 h-4', refreshing && 'animate-spin')} />
+        </button>
       </div>
 
-      {/* ── STATS SUMMARY (2-column layout on mobile, clean spacing) ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl bg-[#0F172A] border border-white/[0.08] shadow-sm">
-          <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Open Orders</div>
-          <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono mt-1">{openCount} Live</div>
+      {error && (
+        <div className="mb-4">
+          <Notice tone="warn">{error}</Notice>
         </div>
+      )}
 
-        <div className="p-4 rounded-2xl bg-[#0F172A] border border-white/[0.08] shadow-sm">
-          <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Closed Orders</div>
-          <div className="text-xl sm:text-2xl font-black text-white font-mono mt-1">{closedCount}</div>
-        </div>
-
-        <div className="col-span-2 sm:col-span-1 p-4 rounded-2xl bg-[#0F172A] border border-emerald-500/20 bg-emerald-950/10 shadow-sm">
-          <div className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Cumulative Net P&L</div>
-          <div className="text-xl sm:text-2xl font-black text-emerald-400 font-mono mt-1">
-            +${totalPnl.toFixed(2)}
-          </div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Stat label="Open" value={String(stats?.openCount ?? 0)} />
+        <Stat
+          label="Floating P&L"
+          value={signedMoney(stats?.floatingPnl ?? 0, currency)}
+          tone={(stats?.floatingPnl ?? 0) >= 0 ? 'up' : 'down'}
+        />
+        <Stat
+          label="Realised (90d)"
+          value={signedMoney(stats?.realizedPnl ?? 0, currency)}
+          tone={(stats?.realizedPnl ?? 0) >= 0 ? 'up' : 'down'}
+        />
+        <Stat
+          label="Win rate"
+          value={stats ? percent(stats.winRate) : '—'}
+          hint={stats ? `${stats.wins}W / ${stats.losses}L` : undefined}
+        />
       </div>
 
-      {/* ── FILTER TABS ── */}
-      <div className="flex items-center gap-1.5 p-1 bg-[#0F172A] border border-white/[0.08] rounded-2xl max-w-sm">
-        {(['all', 'open', 'closed'] as TradeFilter[]).map((f) => (
+      {/* Filter */}
+      <div className="mt-6 inline-flex p-1 rounded-[10px] bg-surface border border-line">
+        {(['open', 'closed'] as Filter[]).map((value) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-              filter === f
-                ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            key={value}
+            onClick={() => setFilter(value)}
+            className={cx(
+              'px-4 py-1.5 rounded-[7px] text-[13px] font-semibold capitalize transition-colors cursor-pointer',
+              filter === value ? 'bg-surface-3 text-ink' : 'text-ink-soft hover:text-ink'
+            )}
           >
-            {f} {f === 'open' ? `(${openCount})` : f === 'closed' ? `(${closedCount})` : `(${ALL_TRADES.length})`}
+            {value} (
+            {value === 'open' ? (stats?.openCount ?? 0) : (stats?.closedCount ?? 0)})
           </button>
         ))}
       </div>
 
-      {/* ── TRADES LIST ── */}
-      <div className="bg-[#0F172A] rounded-2xl sm:rounded-3xl border border-white/[0.08] divide-y divide-white/[0.05] overflow-hidden shadow-sm">
-        {filteredTrades.map((t) => (
-          <div key={t.id} className="p-4 sm:p-5 flex items-center justify-between hover:bg-white/[0.02] transition-colors">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-black text-xs font-mono shrink-0 ${
-                t.direction === 'BUY'
-                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
-              }`}>
-                {t.direction === 'BUY' ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
-              </div>
+      <div className="mt-4">
+        {filter === 'open' ? (
+          !data || data.open.length === 0 ? (
+            <EmptyState icon={<BarChart3 className="w-5 h-5" />} title="No open positions">
+              When the bot finds a setup that passes its trend and risk checks, the position
+              will appear here.
+            </EmptyState>
+          ) : (
+            <Card className="overflow-hidden">
+              {data.open.map((position, index) => (
+                <div
+                  key={position.id}
+                  className={cx('px-4 py-4', index > 0 && 'border-t border-line')}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-semibold">
+                          {pairLabel(position.symbol)}
+                        </span>
+                        <span
+                          className={cx(
+                            'chip',
+                            position.direction === 'BUY'
+                              ? 'border-up/30 text-up'
+                              : 'border-down/30 text-down'
+                          )}
+                        >
+                          {position.direction} {position.volume} lots
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-ink-faint mt-1">
+                        Opened {timeAgo(position.openedAt)}
+                      </p>
+                    </div>
 
-              <div>
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <span className="font-extrabold text-white text-sm sm:text-base">{t.pair}</span>
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
-                    t.direction === 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                  }`}>
-                    {t.direction} {t.lotSize}L
-                  </span>
-                  {t.status === 'open' && (
-                    <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span> Live
-                    </span>
+                    <div className="text-right shrink-0">
+                      <p
+                        className={cx(
+                          'tnum text-[15px]',
+                          position.profit >= 0 ? 'text-up' : 'text-down'
+                        )}
+                      >
+                        {signedMoney(position.profit, currency)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <dl className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-y-2 gap-x-4">
+                    <Cell label="Entry" value={price(position.openPrice)} />
+                    <Cell label="Now" value={price(position.currentPrice)} />
+                    <Cell label="Stop loss" value={price(position.stopLoss)} />
+                    <Cell label="Take profit" value={price(position.takeProfit)} />
+                  </dl>
+
+                  <div className="mt-3.5">
+                    <Button
+                      variant="ghost"
+                      loading={closingId === position.id}
+                      onClick={() => handleClose(position.id)}
+                      className="text-[12px] py-1.5 px-3"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Close now
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </Card>
+          )
+        ) : !data || data.closed.length === 0 ? (
+          <EmptyState icon={<BarChart3 className="w-5 h-5" />} title="No closed trades yet">
+            Closed positions from the last 90 days will be listed here with the exact profit
+            or loss your broker recorded.
+          </EmptyState>
+        ) : (
+          <Card className="overflow-hidden">
+            {data.closed.map((deal, index) => {
+              const net = deal.profit + deal.commission + deal.swap;
+              return (
+                <div
+                  key={deal.id}
+                  className={cx(
+                    'px-4 py-3.5 flex items-center justify-between gap-4',
+                    index > 0 && 'border-t border-line'
                   )}
+                >
+                  <div className="min-w-0">
+                    <p className="text-[14px] font-semibold">{pairLabel(deal.symbol)}</p>
+                    <p className="tnum text-[11px] text-ink-faint mt-0.5">
+                      {deal.volume} lots @ {price(deal.price)} · {dateTime(deal.closedAt)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={cx('tnum text-[14px]', net >= 0 ? 'text-up' : 'text-down')}>
+                      {signedMoney(net, currency)}
+                    </p>
+                    {(deal.commission !== 0 || deal.swap !== 0) && (
+                      <p className="tnum text-[11px] text-ink-faint">
+                        fees {money(deal.commission + deal.swap, currency)}
+                      </p>
+                    )}
+                  </div>
                 </div>
-
-                <div className="text-[10px] sm:text-xs text-slate-400 font-mono mt-0.5">
-                  In: <span className="text-slate-300 font-bold">{t.entryPrice}</span> &bull; {t.status === 'open' ? 'Now: ' : 'Out: '}
-                  <span className="text-slate-300 font-bold">{t.exitPrice || t.currentPrice}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="text-right shrink-0">
-              <div className={`text-sm sm:text-base font-black font-mono ${
-                t.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}>
-                {t.pnl >= 0 ? `+$${t.pnl.toFixed(2)}` : `-$${Math.abs(t.pnl).toFixed(2)}`}
-              </div>
-              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                {formatDate(t.openedAt)}
-              </div>
-            </div>
-          </div>
-        ))}
+              );
+            })}
+          </Card>
+        )}
       </div>
+    </div>
+  );
+}
+
+function Cell({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">
+        {label}
+      </dt>
+      <dd className="tnum text-[13px] mt-0.5">{value}</dd>
     </div>
   );
 }

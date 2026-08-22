@@ -1,32 +1,102 @@
-# React + TypeScript + Vite
+# TradeBot
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+An automated forex trading bot that runs on the user's **own** Exness or FBS
+MetaTrader 5 account. Ugandan mobile-money subscriptions, real broker execution,
+no custody of anyone's funds.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```
+sign up ──▶ onboarding ──▶ pay ──▶ connect broker ──▶ dashboard
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Stack
+
+- **Frontend** — React 19, Vite, Tailwind 4, React Router, Firebase Web SDK
+- **Backend** — Firebase Cloud Functions v2 (codebase `tradebot`), Firestore
+- **Payments** — Marz Pay mobile money, the same gateway Investio uses
+- **Execution** — [MetaApi](https://metaapi.cloud) cloud bridge to MT5
+
+Shares the `investio-ug` Firebase project with Investio. TradeBot functions
+deploy as a separate codebase, so the two never overwrite each other.
+
+## Quick start
+
+```bash
+npm install
+npm run dev                 # http://localhost:3001
+
+cd functions && npm install
+npm run build
+```
+
+Deploy:
+
+```bash
+firebase deploy --only functions:tradebot   # never touches Investio's functions
+npm run build && vercel --prod              # frontend
+```
+
+Full configuration — secrets, MetaApi setup, Firestore rules — is in
+[`SETUP.md`](./SETUP.md).
+
+## Layout
+
+```
+src/
+  App.tsx                     routing + the paywall gate
+  index.css                   design tokens and component classes
+  components/ui.tsx           Button, Card, Field, Notice, Stat, EmptyState
+  components/layout/          app chrome
+  lib/api.ts                  typed wrappers for every Cloud Function
+  lib/auth-context.tsx        auth + live profile subscription
+  lib/constants.ts            plans, brokers, onboarding copy (display only)
+  lib/format.ts               money, price, time formatting
+  pages/                      Auth, Onboarding, Subscribe, ConnectBroker,
+                              Dashboard, Trades, Settings
+
+functions/src/
+  config.ts                   secrets, plans, risk limits — source of truth
+  payments.ts                 subscription payments + activation webhook
+  broker.ts                   MetaApi provisioning and verification
+  trading.ts                  live trades, manual close, the scheduled bot loop
+  strategy.ts                 EMA/RSI/ATR signal engine + position sizing
+  metaapi.ts                  MetaApi REST client
+  crypto-vault.ts             AES-256-GCM for broker credentials
+  util.ts                     phone, logging, provider payload parsing
+
+preview/                      design harness: renders every screen with mock
+                              data, no Firebase needed
+```
+
+### Design preview
+
+To work on the UI without signing in:
+
+```bash
+npx vite --config vite.preview.config.ts
+# then ?screen=auth | onboarding | subscribe | dashboard | trades | broker | settings
+```
+
+`node shots.mjs` renders all seven screens at desktop and mobile widths into
+`shots/`.
+
+## Security model
+
+The browser cannot grant itself anything.
+
+- Only `tbMarzPayWebhook` can mark a subscription active.
+- Only Cloud Functions hold the MetaApi token and the broker password key.
+- `tbConnectBroker` refuses without an active subscription.
+- `tbBotTick` only trades for users who are subscribed, connected, unpaused and
+  not expired.
+
+The Firestore rules that enforce the client half of this are in
+`firestore.rules.tradebot.txt` and need to be pasted into
+`investio/firestore.rules` — rules are project-wide, so this folder deliberately
+does not deploy them.
+
+## Risk
+
+TradeBot places leveraged forex orders. It can lose money. Every position gets a
+stop loss and a take profit, position size comes from account equity rather than
+a fixed lot, and a 5% daily realised loss halts trading for the day — but none of
+that makes losses impossible. Test on an MT5 demo account first.
