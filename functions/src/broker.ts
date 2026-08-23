@@ -14,6 +14,7 @@ import { BROKERS, BROKER_ENC_KEY, COL, METAAPI_TOKEN } from "./config";
 import { encryptSecret, maskAccount } from "./crypto-vault";
 import {
   MetaApiClient,
+  MetaApiError,
   accountRegion,
   describeMetaApiError,
 } from "./metaapi";
@@ -185,7 +186,20 @@ export const tbConnectBroker = onCall(brokerOptions, async (request) => {
         .then(() => client.deleteAccount(metaAccountId))
         .catch(() => undefined);
     }
-    logError("Broker connection failed", error, { uid, brokerId: broker.id });
+    /*
+      Record what was actually attempted. The server string is the field that
+      causes most failures and it is not a secret, so log it verbatim — without
+      it, "connection failed" tells whoever is on call nothing. The password is
+      never included; `logError` redacts, and it is not passed here anyway.
+    */
+    logError("Broker connection failed", error, {
+      uid,
+      brokerId: broker.id,
+      server: server.trim(),
+      loginMasked: maskAccount(accountId.trim()),
+      metaApiStatus: error instanceof MetaApiError ? error.status : undefined,
+      metaApiDetails: error instanceof MetaApiError ? error.details : undefined,
+    });
     throw new HttpsError("failed-precondition", describeMetaApiError(error));
   }
 });

@@ -202,6 +202,22 @@ export class MetaApiClient {
       const message =
         (parsed as { message?: string })?.message ||
         `MetaApi request failed (${response.status})`;
+
+      /*
+        Log the full response body here rather than at the call site. MetaApi
+        puts the useful part of a 400 in `details` / `error` — which server
+        name it could not resolve, which field it rejected — and without this
+        every provisioning failure looks identical in Cloud Logging.
+        `logError` redacts before writing, so the password never lands here.
+      */
+      logError("MetaApi request failed", undefined, {
+        status: response.status,
+        url: url.replace(/\/accounts\/[^/]+/, "/accounts/<id>"),
+        method: init.method || "GET",
+        metaApiMessage: message,
+        metaApiBody: parsed,
+      });
+
       throw new MetaApiError(message, response.status, parsed);
     }
 
@@ -479,13 +495,48 @@ function randomTransactionId(): string {
 }
 
 /** Human-readable reason for a failed connection attempt. */
+/**
+ * Human-readable reason for a failed connection attempt.
+ *
+ * The distinction that matters: 401/403 means OUR MetaApi token is wrong,
+ * which the user can do nothing about. 400 means MetaApi rejected the
+ * account details — nearly always because it cannot resolve the server
+ * name to a known broker — which the user can fix in about ten seconds
+ * once they are told that. Conflating the two sends people to support with
+ * a problem they could have solved themselves.
+ */
 export function describeMetaApiError(error: unknown): string {
   if (error instanceof MetaApiError) {
-    if (error.status === 401) {
-      return "The trading bridge rejected our credentials. Please contact support.";
+    if (error.status === 401 || error.status === 403) {
+      return "The trading bridge rejected our access token. This is on our side — please contact support.";
     }
     if (error.status === 429) {
       return "The trading bridge is rate limited right now. Please try again in a minute.";
+    }
+    if (error.status === 400) {
+      /*
+        MetaApi's own message is usually specific ("specified server not
+        found", "invalid login"). Prefer it, but always append the one thing
+        that fixes most of these, because the raw message rarely says it.
+      */
+      const detail = (error.message || "").trim();
+      const generic =
+        !detail ||
+        /^metaapi request failed/i.test(detail) ||
+        /^bad request$/i.test(detail);
+
+      if (generic) {
+        return (
+          "The trading bridge could not use these account details. Check that the " +
+          "server name matches your MetaTrader terminal exactly — for example " +
+          "Exness-Real9, not Exness-Real or Exness Real 9."
+        );
+      }
+      const punctuated = /[.!?]$/.test(detail) ? detail : `${detail}.`;
+      return `${punctuated} Check that the server name matches your MetaTrader terminal exactly.`;
+    }
+    if (error.status === 408) {
+      return error.message;
     }
     return error.message;
   }
