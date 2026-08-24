@@ -61,11 +61,12 @@ export interface InitiateSubscriptionResult {
 export function initiateSubscription(
   planId: string,
   phoneNumber: string,
+  country: 'UG' | 'KE' = 'UG',
   forceNew?: boolean
 ) {
-  return call<{ planId: string; phoneNumber: string; forceNew?: boolean }, InitiateSubscriptionResult>(
+  return call<{ planId: string; phoneNumber: string; country?: 'UG' | 'KE'; forceNew?: boolean }, InitiateSubscriptionResult>(
     'tbInitiateSubscription',
-    { planId, phoneNumber, forceNew }
+    { planId, phoneNumber, country, forceNew }
   );
 }
 

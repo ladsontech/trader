@@ -2,6 +2,14 @@ export function ugx(amount: number): string {
   return `UGX ${Math.round(amount).toLocaleString('en-UG')}`;
 }
 
+export function kes(amount: number): string {
+  return `KES ${Math.round(amount).toLocaleString('en-KE')}`;
+}
+
+export function formatLocalMoney(amount: number, currency: 'UGX' | 'KES' = 'UGX'): string {
+  return currency === 'KES' ? kes(amount) : ugx(amount);
+}
+
 export function money(amount: number, currency = 'USD'): string {
   const sign = amount < 0 ? '-' : '';
   const abs = Math.abs(amount);

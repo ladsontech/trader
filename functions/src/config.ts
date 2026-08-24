@@ -83,7 +83,9 @@ export const COL = {
 export interface PlanDef {
   id: "standard" | "premium";
   name: string;
-  price: number; // UGX
+  price: number; // UGX fallback
+  priceUgx: number;
+  priceKes: number;
   /** How long one payment buys. Billing is annual. */
   durationDays: number;
   maxSymbols: number;
@@ -97,6 +99,8 @@ export const PLANS: Record<string, PlanDef> = {
     id: "standard",
     name: "Standard Bot",
     price: 50000,
+    priceUgx: 50000,
+    priceKes: 1800,
     durationDays: 365,
     maxSymbols: 3,
     symbols: ["EURUSD", "GBPUSD", "USDJPY"],
@@ -107,6 +111,8 @@ export const PLANS: Record<string, PlanDef> = {
     id: "premium",
     name: "VIP Premium Bot",
     price: 100000,
+    priceUgx: 100000,
+    priceKes: 3500,
     durationDays: 365,
     maxSymbols: 8,
     symbols: [
@@ -123,6 +129,10 @@ export const PLANS: Record<string, PlanDef> = {
     maxOpenPositions: 6,
   },
 };
+
+export function getPlanPrice(plan: PlanDef, country: "UG" | "KE"): number {
+  return country === "KE" ? plan.priceKes : plan.priceUgx;
+}
 
 /* ── Supported brokers (MT5 via MetaApi) ──────────────────────── */
 export interface BrokerDef {

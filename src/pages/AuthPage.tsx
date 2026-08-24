@@ -3,16 +3,16 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { Button, Field, Notice, cx } from '../components/ui';
-import { Bot, Eye, EyeOff } from 'lucide-react';
+import { Bot, Eye, EyeOff, Globe } from 'lucide-react';
+import { useAuth } from '../lib/auth-context';
 
-/**
- * Phone-number sign-in, mapped onto a Firebase email identity so it shares
- * the Investio auth project. Deliberately plain: two fields, one button.
- */
 export default function AuthPage() {
+  const { setCountry: setGlobalCountry } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>('signup');
+  const [country, setCountry] = useState<'UG' | 'KE'>('UG');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -21,23 +21,42 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
 
   const isSignup = mode === 'signup';
+  const isKenya = country === 'KE';
+  const dialCode = isKenya ? '+254' : '+256';
+
+  const handleCountryChange = (c: 'UG' | 'KE') => {
+    setCountry(c);
+    setGlobalCountry(c);
+    setError('');
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
 
     const digits = phone.replace(/\D/g, '');
-    const normalized =
-      digits.startsWith('256') && digits.length === 12
-        ? `0${digits.slice(3)}`
-        : digits.length === 9
-          ? `0${digits}`
-          : digits;
+    let normalized = digits;
 
-    if (!/^0(7|3)\d{8}$/.test(normalized)) {
-      setError('Enter a valid MTN or Airtel number, for example 0770123456.');
-      return;
+    if (isKenya) {
+      if (digits.startsWith('254') && digits.length === 12) normalized = `0${digits.slice(3)}`;
+      else if (digits.length === 9 && (digits.startsWith('7') || digits.startsWith('1'))) normalized = `0${digits}`;
+      else if (digits.length === 10 && digits.startsWith('0')) normalized = digits;
+
+      if (!/^0(7|1)\d{8}$/.test(normalized)) {
+        setError('Enter a valid Safaricom M-Pesa or Airtel Kenya number, e.g. 0712345678.');
+        return;
+      }
+    } else {
+      if (digits.startsWith('256') && digits.length === 12) normalized = `0${digits.slice(3)}`;
+      else if (digits.length === 9 && digits.startsWith('7')) normalized = `0${digits}`;
+      else if (digits.length === 10 && digits.startsWith('0')) normalized = digits;
+
+      if (!/^0(7|3)\d{8}$/.test(normalized)) {
+        setError('Enter a valid MTN or Airtel Uganda number, e.g. 0770123456.');
+        return;
+      }
     }
+
     if (password.length < 6) {
       setError('Your password needs at least 6 characters.');
       return;
@@ -49,13 +68,23 @@ export default function AuthPage() {
 
     setLoading(true);
     try {
-      const identity = `${normalized}@investio.app`;
+      const emailPrefix = isKenya ? `254${normalized.slice(1)}` : normalized;
+      const identity = `${emailPrefix}@investio.app`;
+
       if (isSignup) {
-        await createUserWithEmailAndPassword(auth, identity, password);
+        const cred = await createUserWithEmailAndPassword(auth, identity, password);
+        await setDoc(doc(db, 'tradebot_users', cred.user.uid), {
+          phoneDigits: normalized,
+          country,
+          currency: isKenya ? 'KES' : 'UGX',
+          subscriptionStatus: 'none',
+          brokerConnected: false,
+          botEnabled: false,
+          createdAt: new Date(),
+        }, { merge: true });
       } else {
         await signInWithEmailAndPassword(auth, identity, password);
       }
-      // The gate in App.tsx takes it from here.
     } catch (err) {
       const code = (err as { code?: string }).code || '';
       const messages: Record<string, string> = {
@@ -80,7 +109,7 @@ export default function AuthPage() {
       <main className="flex-1 flex items-center justify-center px-5 py-10">
         <div className="w-full max-w-[380px] fade-up">
           {/* Brand */}
-          <div className="flex items-center gap-2.5 mb-9">
+          <div className="flex items-center gap-2.5 mb-8">
             <div className="w-9 h-9 rounded-[10px] bg-accent-soft border border-accent/25 flex items-center justify-center">
               <Bot className="w-[18px] h-[18px] text-accent" />
             </div>
@@ -95,17 +124,52 @@ export default function AuthPage() {
           <h1 className="text-[22px] font-semibold">
             {isSignup ? 'Create your account' : 'Welcome back'}
           </h1>
-          <p className="text-[13px] text-ink-soft mt-1 mb-6">
+          <p className="text-[13px] text-ink-soft mt-1 mb-5">
             {isSignup
-              ? 'Your phone number is your login. One minute and you are in.'
-              : 'Sign in with the number you registered.'}
+              ? 'Select your country and enter your phone number to get started.'
+              : 'Sign in with the number and country you registered.'}
           </p>
 
+          {/* Country Selection */}
+          <div className="mb-4">
+            <label className="block text-[11px] font-semibold text-ink-muted mb-1.5 uppercase tracking-wider">
+              Country / Region
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleCountryChange('UG')}
+                className={cx(
+                  'flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer',
+                  country === 'UG'
+                    ? 'border-accent bg-accent-soft text-ink-base shadow-xs'
+                    : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink-base'
+                )}
+              >
+                <span>🇺🇬</span>
+                <span>Uganda (UGX)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCountryChange('KE')}
+                className={cx(
+                  'flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-semibold transition cursor-pointer',
+                  country === 'KE'
+                    ? 'border-accent bg-accent-soft text-ink-base shadow-xs'
+                    : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink-base'
+                )}
+              >
+                <span>🇰🇪</span>
+                <span>Kenya (KES)</span>
+              </button>
+            </div>
+          </div>
+
           <form onSubmit={submit} className="space-y-4">
-            <Field label="Phone number">
+            <Field label={isKenya ? 'M-Pesa / Phone number' : 'Mobile Money number'}>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-ink-faint tnum pointer-events-none border-r border-line pr-2.5">
-                  +256
+                  {dialCode}
                 </span>
                 <input
                   id="auth-phone"
@@ -113,7 +177,7 @@ export default function AuthPage() {
                   inputMode="numeric"
                   autoComplete="tel"
                   required
-                  placeholder="770 123 456"
+                  placeholder={isKenya ? '712 345 678 or 140 123 456' : '770 123 456'}
                   className="field tnum pl-[74px]"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}

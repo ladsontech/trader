@@ -10,7 +10,7 @@ import { Button, Card, Notice, PageTitle, SectionTitle, cx } from '../components
 import { ArrowRight, LogOut, Pause, Play } from 'lucide-react';
 
 export default function Settings() {
-  const { user, userData, isSubscribed, isBrokerConnected, refreshUserData } = useAuth();
+  const { user, userData, isSubscribed, isBrokerConnected, country, setCountry, refreshUserData } = useAuth();
   const [toggling, setToggling] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,6 +62,49 @@ export default function Settings() {
           {isSubscribed ? 'Renew or change plan' : 'Choose a plan'}
           <ArrowRight className="w-4 h-4" />
         </Link>
+      </Card>
+
+      {/* Regional Currency */}
+      <Card className="p-5 mt-4">
+        <SectionTitle
+          title="Regional Currency"
+          subtitle="Select your preferred currency and payment channel for plan subscriptions."
+        />
+        <div className="grid grid-cols-2 gap-2.5 mt-3">
+          <button
+            type="button"
+            onClick={() => setCountry('UG')}
+            className={cx(
+              'flex items-center gap-3 p-3 rounded-xl border text-left transition cursor-pointer',
+              country === 'UG'
+                ? 'border-accent bg-accent-soft text-ink-base shadow-xs'
+                : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink-base'
+            )}
+          >
+            <span className="text-xl">🇺🇬</span>
+            <div>
+              <p className="text-xs font-semibold text-ink-base">Uganda (UGX)</p>
+              <p className="text-[11px] text-ink-faint">MTN & Airtel Money</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCountry('KE')}
+            className={cx(
+              'flex items-center gap-3 p-3 rounded-xl border text-left transition cursor-pointer',
+              country === 'KE'
+                ? 'border-accent bg-accent-soft text-ink-base shadow-xs'
+                : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink-base'
+            )}
+          >
+            <span className="text-xl">🇰🇪</span>
+            <div>
+              <p className="text-xs font-semibold text-ink-base">Kenya (KES)</p>
+              <p className="text-[11px] text-ink-faint">Safaricom M-Pesa</p>
+            </div>
+          </button>
+        </div>
       </Card>
 
       {/* Bot */}

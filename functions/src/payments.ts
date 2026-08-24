@@ -18,6 +18,7 @@ import {
   MARZPAY_BASE_URL,
   PLANS,
   TRADEBOT_WEBHOOK_URL,
+  getPlanPrice,
   marzPayCallableOptions,
   marzPayRequestOptions,
 } from "./config";
@@ -28,10 +29,10 @@ import {
   generateReference,
   isFailureStatus,
   isSuccessStatus,
-  isValidUgandanPhone,
+  isValidPhone,
   logError,
   logInfo,
-  normalizeUgandanPhone,
+  normalizePhone,
   providerErrorMessage,
   providerSnapshot,
   sanitizeText,
@@ -64,32 +65,39 @@ export const tbInitiateSubscription = onCall(
       throw new HttpsError("unauthenticated", "Please sign in first.");
     }
     const uid = request.auth.uid;
-    const { planId, phoneNumber } = (request.data || {}) as {
+    const { planId, phoneNumber, country: reqCountry } = (request.data || {}) as {
       planId?: string;
       phoneNumber?: string;
+      country?: "UG" | "KE";
     };
 
     const plan = planId ? PLANS[planId] : undefined;
     if (!plan) {
       throw new HttpsError("invalid-argument", "Choose a valid package.");
     }
-    if (!phoneNumber || !isValidUgandanPhone(phoneNumber)) {
+
+    const cleanRawPhone = (phoneNumber || "").replace(/\s+/g, "");
+    const isKenya =
+      reqCountry === "KE" ||
+      cleanRawPhone.startsWith("+254") ||
+      cleanRawPhone.replace(/\D/g, "").startsWith("254");
+    const targetCountry: "UG" | "KE" = isKenya ? "KE" : "UG";
+    const currency = isKenya ? "KES" : "UGX";
+
+    if (!phoneNumber || !isValidPhone(phoneNumber, targetCountry)) {
       throw new HttpsError(
         "invalid-argument",
-        "Enter a valid MTN or Airtel number, e.g. 0770123456."
+        isKenya
+          ? "Enter a valid Safaricom M-Pesa or Airtel Kenya number, e.g. 0712345678."
+          : "Enter a valid MTN or Airtel number, e.g. 0770123456."
       );
     }
 
-    const formattedPhone = formatPhone(phoneNumber);
-    const localPhone = normalizeUgandanPhone(phoneNumber);
+    const formattedPhone = formatPhone(phoneNumber, targetCountry);
+    const localPhone = normalizePhone(phoneNumber, targetCountry);
+    const planPrice = getPlanPrice(plan, targetCountry);
 
     // Reuse a live prompt instead of spamming the user's handset.
-    //
-    // This is a single document lookup by uid, NOT a compound query. A
-    // where(userId).where(status).orderBy(createdAt) query would need a
-    // composite index that does not exist on a fresh project, and Firestore
-    // would throw FAILED_PRECONDITION on the very first payment. Same reason
-    // Investio keeps an `active_deposits/{uid}` document.
     const activeRef = db.collection(COL.activePayments).doc(uid);
     const activeSnap = await activeRef.get();
 
@@ -102,9 +110,11 @@ export const tbInitiateSubscription = onCall(
           reused: true,
           reference: active.reference as string,
           planId: active.planId as string,
-          amount: Number(active.amount) || plan.price,
-          message:
-            "A mobile money prompt is already waiting on your phone. Enter your PIN to finish.",
+          amount: Number(active.amount) || planPrice,
+          currency: active.currency || currency,
+          message: isKenya
+            ? "An M-Pesa prompt is already waiting on your phone. Enter your M-Pesa PIN to finish."
+            : "A mobile money prompt is already waiting on your phone. Enter your PIN to finish.",
         };
       }
     }
@@ -118,8 +128,9 @@ export const tbInitiateSubscription = onCall(
       type: "subscription",
       planId: plan.id,
       planName: plan.name,
-      amount: plan.price,
-      currency: "UGX",
+      amount: planPrice,
+      currency,
+      country: targetCountry,
       durationDays: plan.durationDays,
       phoneNumber: formattedPhone,
       phoneDigits: localPhone,
@@ -132,7 +143,9 @@ export const tbInitiateSubscription = onCall(
       userId: uid,
       reference,
       planId: plan.id,
-      amount: plan.price,
+      amount: planPrice,
+      currency,
+      country: targetCountry,
       status: "creating",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -143,13 +156,13 @@ export const tbInitiateSubscription = onCall(
 
       const formData = new FormData();
       formData.append("phone_number", formattedPhone);
-      formData.append("amount", String(plan.price));
-      formData.append("country", "UG");
+      formData.append("amount", String(planPrice));
+      formData.append("country", targetCountry);
       formData.append("reference", reference);
       formData.append("callback_url", TRADEBOT_WEBHOOK_URL);
       formData.append(
         "description",
-        `TradeBot ${plan.name} subscription - UGX ${plan.price.toLocaleString()}`
+        `TradeBot ${plan.name} subscription - ${currency} ${planPrice.toLocaleString()}`
       );
 
       const response = await fetch(`${MARZPAY_BASE_URL}/collect-money`, {
@@ -283,6 +296,8 @@ async function activateSubscription(reference: string): Promise<void> {
         subscriptionExpiresAt: expiresAt,
         subscriptionActivatedAt: now,
         subscriptionReference: reference,
+        country: tx.country || existing.country || "UG",
+        currency: tx.currency || existing.currency || "UGX",
         phoneDigits: existing.phoneDigits || tx.phoneDigits || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
@@ -295,7 +310,8 @@ async function activateSubscription(reference: string): Promise<void> {
       planId: plan.id,
       planName: plan.name,
       amount: tx.amount,
-      currency: "UGX",
+      currency: tx.currency || "UGX",
+      country: tx.country || "UG",
       reference,
       phoneNumber: tx.phoneNumber,
       startedAt: now,

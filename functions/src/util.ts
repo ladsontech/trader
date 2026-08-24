@@ -9,24 +9,52 @@ export function generateReference(): string {
 }
 
 /* ── Phone ────────────────────────────────────────────────────── */
-export function formatPhone(phone: string): string {
+export function formatPhone(phone: string, country: "UG" | "KE" = "UG"): string {
   let cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
+  const isKenya = country === "KE" || cleaned.startsWith("+254") || cleaned.startsWith("254");
+
+  if (isKenya) {
+    if (cleaned.startsWith("0")) cleaned = "+254" + cleaned.substring(1);
+    if (cleaned.startsWith("254") && !cleaned.startsWith("+")) cleaned = "+" + cleaned;
+    if (!cleaned.startsWith("+")) cleaned = "+254" + cleaned;
+    return cleaned;
+  }
+
   if (cleaned.startsWith("0")) cleaned = "+256" + cleaned.substring(1);
   if (cleaned.startsWith("256") && !cleaned.startsWith("+")) cleaned = "+" + cleaned;
   if (!cleaned.startsWith("+")) cleaned = "+256" + cleaned;
   return cleaned;
 }
 
-export function normalizeUgandanPhone(value: string): string {
+export function normalizePhone(value: string, country: "UG" | "KE" = "UG"): string {
   const digits = value.replace(/\D/g, "");
+  const isKenya = country === "KE" || digits.startsWith("254");
+
+  if (isKenya) {
+    if (digits.startsWith("254") && digits.length === 12) return `0${digits.slice(3)}`;
+    if (digits.length === 9 && (digits.startsWith("7") || digits.startsWith("1"))) return `0${digits}`;
+    return digits;
+  }
+
   if (digits.startsWith("256") && digits.length === 12) return `0${digits.slice(3)}`;
   if (digits.length === 9 && digits.startsWith("7")) return `0${digits}`;
   return digits;
 }
 
-export function isValidUgandanPhone(value: string): boolean {
-  const normalized = normalizeUgandanPhone(value);
+export function normalizeUgandanPhone(value: string): string {
+  return normalizePhone(value, "UG");
+}
+
+export function isValidPhone(value: string, country: "UG" | "KE" = "UG"): boolean {
+  const normalized = normalizePhone(value, country);
+  if (country === "KE" || value.startsWith("+254") || value.replace(/\D/g, "").startsWith("254")) {
+    return /^0(7|1)\d{8}$/.test(normalized);
+  }
   return /^0(7|3)\d{8}$/.test(normalized);
+}
+
+export function isValidUgandanPhone(value: string): boolean {
+  return isValidPhone(value, "UG");
 }
 
 /* ── Safe logging (never leak provider payloads / credentials) ── */

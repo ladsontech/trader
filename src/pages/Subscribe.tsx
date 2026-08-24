@@ -3,18 +3,18 @@ import { Link } from 'react-router';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/auth-context';
-import { PLANS, planById } from '../lib/constants';
+import { PLANS, getPlanPrice, planById } from '../lib/constants';
 import { checkPayment, initiateSubscription, apiErrorMessage } from '../lib/api';
-import { remainingLabel, renewalDate, ugx } from '../lib/format';
+import { formatLocalMoney, remainingLabel, renewalDate } from '../lib/format';
 import { Button, Card, Field, Notice, PageTitle, cx } from '../components/ui';
-import { ArrowRight, Check, CheckCircle2, Smartphone, XCircle } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Globe, Smartphone, XCircle } from 'lucide-react';
 
 type TxState = 'idle' | 'waiting' | 'completed' | 'failed';
 
 const pendingKey = (uid: string) => `tradebot.pendingPayment.${uid}`;
 
 export default function Subscribe() {
-  const { user, userData, isSubscribed } = useAuth();
+  const { user, userData, isSubscribed, country, currency, setCountry } = useAuth();
   const [selected, setSelected] = useState<'standard' | 'premium'>('premium');
   const [phone, setPhone] = useState(userData?.phoneDigits || '');
   const [state, setState] = useState<TxState>('idle');
@@ -25,6 +25,8 @@ export default function Subscribe() {
   const submittingRef = useRef(false);
 
   const plan = PLANS.find((p) => p.id === selected)!;
+  const isKenya = country === 'KE';
+  const planPrice = getPlanPrice(plan, currency);
 
   /* Restore a prompt the user walked away from. */
   useEffect(() => {
@@ -90,7 +92,11 @@ export default function Subscribe() {
 
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 9) {
-      setError('Enter the mobile money number to charge, for example 0770123456.');
+      setError(
+        isKenya
+          ? 'Enter the M-Pesa number to charge, for example 0712345678.'
+          : 'Enter the mobile money number to charge, for example 0770123456.'
+      );
       return;
     }
 
@@ -100,7 +106,7 @@ export default function Subscribe() {
     setNotice('');
 
     try {
-      const result = await initiateSubscription(plan.id, digits);
+      const result = await initiateSubscription(plan.id, digits, country);
       if (user) {
         localStorage.setItem(
           pendingKey(user.uid),
@@ -168,12 +174,19 @@ export default function Subscribe() {
 
         <div className="mt-8">
           <p className="text-[13px] text-ink-soft mb-3">Renew or change plan</p>
-          <PlanGrid selected={selected} onSelect={setSelected} locked={false} />
+          <PlanGrid
+            selected={selected}
+            onSelect={setSelected}
+            currency={currency}
+            locked={false}
+          />
           <div className="mt-4">
             <PayForm
               phone={phone}
               setPhone={setPhone}
-              amount={plan.price}
+              amount={planPrice}
+              currency={currency}
+              country={country}
               onSubmit={pay}
               submitting={submitting}
               disabled={false}
@@ -214,18 +227,60 @@ export default function Subscribe() {
   /* ── Choose and pay ─────────────────────────────────────────── */
   return (
     <div className="max-w-2xl">
-      <PageTitle
-        title="Choose your plan"
-        subtitle="One payment covers a full year, by MTN or Airtel mobile money. The bot starts as soon as you connect your broker."
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink-base">
+            Choose your plan
+          </h1>
+          <p className="text-xs sm:text-sm text-ink-soft mt-1">
+            {isKenya
+              ? 'One payment covers a full year via Safaricom M-Pesa. The bot starts as soon as you connect your broker.'
+              : 'One payment covers a full year via MTN or Airtel Mobile Money. The bot starts as soon as you connect your broker.'}
+          </p>
+        </div>
 
-      <PlanGrid selected={selected} onSelect={setSelected} locked={state === 'waiting'} />
+        {/* Region Switcher */}
+        <div className="flex items-center gap-1 bg-surface border border-line p-1 rounded-xl shrink-0 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setCountry('UG')}
+            className={cx(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer',
+              country === 'UG'
+                ? 'bg-raised text-ink-base border border-line-strong shadow-xs'
+                : 'text-ink-muted hover:text-ink-base'
+            )}
+          >
+            <span>🇺🇬</span> UGX
+          </button>
+          <button
+            type="button"
+            onClick={() => setCountry('KE')}
+            className={cx(
+              'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer',
+              country === 'KE'
+                ? 'bg-raised text-ink-base border border-line-strong shadow-xs'
+                : 'text-ink-muted hover:text-ink-base'
+            )}
+          >
+            <span>🇰🇪</span> KES
+          </button>
+        </div>
+      </div>
+
+      <PlanGrid
+        selected={selected}
+        onSelect={setSelected}
+        currency={currency}
+        locked={state === 'waiting'}
+      />
 
       <div className="mt-5 space-y-3">
         {state === 'waiting' && (
           <Notice tone="warn" title="Check your phone">
-            Approve the {ugx(plan.price)} request with your mobile money PIN. This page
-            updates itself the moment it clears — no need to refresh.
+            {isKenya
+              ? `Approve the ${formatLocalMoney(planPrice, currency)} M-Pesa STK prompt on your Safaricom handset. This page updates itself the moment it clears.`
+              : `Approve the ${formatLocalMoney(planPrice, currency)} request with your Mobile Money PIN. This page updates itself the moment it clears.`}
           </Notice>
         )}
 
@@ -246,7 +301,9 @@ export default function Subscribe() {
           <PayForm
             phone={phone}
             setPhone={setPhone}
-            amount={plan.price}
+            amount={planPrice}
+            currency={currency}
+            country={country}
             onSubmit={pay}
             submitting={submitting}
             disabled={state === 'waiting'}
@@ -255,8 +312,8 @@ export default function Subscribe() {
       </div>
 
       <p className="mt-5 text-[11px] text-ink-faint leading-relaxed">
-        Payments are collected through the Investio mobile money channel. Your subscription is
-        activated by our payment server once the provider confirms the transaction.
+        Payments are collected securely via Mobile Money & M-Pesa. Your subscription is
+        activated by our automated payment server once the provider confirms the transaction.
       </p>
     </div>
   );
@@ -267,16 +324,19 @@ export default function Subscribe() {
 function PlanGrid({
   selected,
   onSelect,
+  currency,
   locked,
 }: {
   selected: string;
   onSelect: (id: 'standard' | 'premium') => void;
+  currency: 'UGX' | 'KES';
   locked: boolean;
 }) {
   return (
     <div className="grid sm:grid-cols-2 gap-3">
       {PLANS.map((p) => {
         const active = selected === p.id;
+        const price = getPlanPrice(p, currency);
         return (
           <button
             key={p.id}
@@ -310,8 +370,8 @@ function PlanGrid({
               </span>
             </div>
 
-            <p className="tnum text-[22px] mt-3">
-              {ugx(p.price)}
+            <p className="tnum text-[22px] mt-3 font-bold text-ink-base">
+              {formatLocalMoney(price, currency)}
               <span className="font-sans text-[12px] text-ink-faint"> / year</span>
             </p>
 
@@ -334,6 +394,8 @@ function PayForm({
   phone,
   setPhone,
   amount,
+  currency,
+  country,
   onSubmit,
   submitting,
   disabled,
@@ -341,20 +403,29 @@ function PayForm({
   phone: string;
   setPhone: (v: string) => void;
   amount: number;
+  currency: 'UGX' | 'KES';
+  country: 'UG' | 'KE';
   onSubmit: (e: React.FormEvent) => void;
   submitting: boolean;
   disabled: boolean;
 }) {
+  const isKenya = country === 'KE';
+  const dialCode = isKenya ? '+254' : '+256';
+
   return (
     <Card className="p-4">
       <form onSubmit={onSubmit} className="space-y-4">
         <Field
-          label="Mobile money number"
-          help="MTN or Airtel. The PIN prompt goes to this number."
+          label={isKenya ? 'M-Pesa phone number' : 'Mobile Money number'}
+          help={
+            isKenya
+              ? 'Safaricom M-Pesa or Airtel Money. An STK PIN prompt goes to this handset.'
+              : 'MTN or Airtel Uganda. The PIN prompt goes to this number.'
+          }
         >
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-ink-faint tnum pointer-events-none border-r border-line pr-2.5">
-              +256
+              {dialCode}
             </span>
             <input
               id="subscribe-phone"
@@ -362,7 +433,7 @@ function PayForm({
               inputMode="numeric"
               required
               disabled={disabled}
-              placeholder="770 123 456"
+              placeholder={isKenya ? '712 345 678 or 140 123 456' : '770 123 456'}
               className="field tnum pl-[74px]"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -372,7 +443,9 @@ function PayForm({
 
         <div className="flex items-center justify-between pt-1">
           <span className="text-[13px] text-ink-soft">Total today</span>
-          <span className="tnum text-[15px] font-semibold">{ugx(amount)}</span>
+          <span className="tnum text-[15px] font-semibold text-ink-base">
+            {formatLocalMoney(amount, currency)}
+          </span>
         </div>
 
         <Button
@@ -390,7 +463,7 @@ function PayForm({
           ) : (
             <>
               <Smartphone className="w-4 h-4" />
-              Send payment request
+              {isKenya ? 'Send M-Pesa STK Prompt' : 'Send payment request'}
             </>
           )}
         </Button>

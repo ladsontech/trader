@@ -12,7 +12,9 @@ export interface Plan {
   id: PlanId;
   name: string;
   tagline: string;
-  price: number;
+  price: number; // UGX fallback
+  priceUgx: number;
+  priceKes: number;
   durationDays: number;
   pairs: string;
   riskPercent: number;
@@ -27,6 +29,8 @@ export const PLANS: Plan[] = [
     name: 'Standard',
     tagline: 'The three majors, traded carefully.',
     price: 50000,
+    priceUgx: 50000,
+    priceKes: 1800,
     durationDays: 365,
     pairs: 'EUR/USD · GBP/USD · USD/JPY',
     riskPercent: 0.5,
@@ -44,6 +48,8 @@ export const PLANS: Plan[] = [
     name: 'Premium',
     tagline: 'Every pair the bot trades, including gold.',
     price: 100000,
+    priceUgx: 100000,
+    priceKes: 3500,
     durationDays: 365,
     pairs: '7 forex pairs + XAU/USD',
     riskPercent: 1,
@@ -58,6 +64,10 @@ export const PLANS: Plan[] = [
     ],
   },
 ];
+
+export function getPlanPrice(plan: Plan, currency: 'UGX' | 'KES' = 'UGX'): number {
+  return currency === 'KES' ? plan.priceKes : plan.priceUgx;
+}
 
 export function planById(id?: string | null): Plan | undefined {
   return PLANS.find((p) => p.id === id);
