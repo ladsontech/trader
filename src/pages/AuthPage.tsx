@@ -6,7 +6,7 @@ import {
 import { auth, db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Button, Field, Notice, cx } from '../components/ui';
-import { Bot, Eye, EyeOff, Globe } from 'lucide-react';
+import { Bot, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 
 export default function AuthPage() {

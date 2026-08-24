@@ -7,7 +7,7 @@ import { PLANS, getPlanPrice, planById } from '../lib/constants';
 import { checkPayment, initiateSubscription, apiErrorMessage } from '../lib/api';
 import { formatLocalMoney, remainingLabel, renewalDate } from '../lib/format';
 import { Button, Card, Field, Notice, PageTitle, cx } from '../components/ui';
-import { ArrowRight, Check, CheckCircle2, Globe, Smartphone, XCircle } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Smartphone, XCircle } from 'lucide-react';
 
 type TxState = 'idle' | 'waiting' | 'completed' | 'failed';
 
