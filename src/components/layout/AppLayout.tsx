@@ -7,19 +7,21 @@ import {
   LayoutDashboard,
   Plug,
   Settings as SettingsIcon,
+  ShieldCheck,
   Wallet,
 } from 'lucide-react';
 
-const NAV = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/trades', label: 'Trades', icon: BarChart3 },
-  { to: '/broker', label: 'Broker', icon: Plug },
-  { to: '/subscribe', label: 'Plan', icon: Wallet },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon },
-];
-
 export default function AppLayout() {
-  const { userData, isSubscribed, isBrokerConnected } = useAuth();
+  const { userData, isSubscribed, isBrokerConnected, isAdmin } = useAuth();
+
+  const NAV = [
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+    { to: '/trades', label: 'Trades', icon: BarChart3 },
+    { to: '/broker', label: 'Broker', icon: Plug },
+    { to: '/subscribe', label: 'Plan', icon: Wallet },
+    { to: '/settings', label: 'Settings', icon: SettingsIcon },
+    ...(isAdmin ? [{ to: '/admin', label: 'Admin', icon: ShieldCheck, end: false }] : []),
+  ];
 
   const status: { tone: 'up' | 'warn' | 'idle'; label: string } = !isSubscribed
     ? { tone: 'idle', label: 'No plan' }
@@ -42,6 +44,11 @@ export default function AppLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <span className="chip text-[11px] font-bold text-accent border-accent/30 bg-accent-soft">
+                Admin
+              </span>
+            )}
             <span className="chip">
               <StatusDot tone={status.tone} />
               {status.label}

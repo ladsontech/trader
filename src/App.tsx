@@ -9,6 +9,7 @@ import ConnectBroker from './pages/ConnectBroker';
 import Dashboard from './pages/Dashboard';
 import Trades from './pages/Trades';
 import Settings from './pages/Settings';
+import Admin from './pages/Admin';
 import { Spinner } from './components/ui';
 
 function Booting() {
@@ -41,6 +42,7 @@ function Gate({ children }: { children: React.ReactNode }) {
     isSubscribed,
     isBrokerConnected,
     hasSeenOnboarding,
+    isAdmin,
   } = useAuth();
   const location = useLocation();
 
@@ -51,6 +53,9 @@ function Gate({ children }: { children: React.ReactNode }) {
   // or failed read looks identical to "this user has not paid", and a paying
   // customer gets thrown back to the paywall mid-session.
   if (!profileLoaded) return <Booting />;
+
+  // Admin has complete access to everything without gating
+  if (isAdmin) return <>{children}</>;
 
   const path = location.pathname;
 
@@ -105,6 +110,7 @@ function AppRoutes() {
         <Route path="/broker" element={<ConnectBroker />} />
         <Route path="/trades" element={<Trades />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/admin" element={<Admin />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
