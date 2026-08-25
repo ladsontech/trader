@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/auth-context';
-import { Card, SectionTitle, StatusDot, cx } from '../components/ui';
+import { Button, Card, Field, Notice, SectionTitle, StatusDot, cx } from '../components/ui';
 import {
   Bot,
   CheckCircle2,
   Clock,
   CreditCard,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Lock,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -54,7 +58,12 @@ interface TransactionRecord {
 }
 
 export default function Admin() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, adminUnlocked, unlockAdmin, lockAdmin } = useAuth();
+  const [passcode, setPasscode] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [submittingAuth, setSubmittingAuth] = useState(false);
+
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -72,8 +81,25 @@ export default function Admin() {
   const [txStatusFilter, setTxStatusFilter] = useState<'ALL' | 'completed' | 'pending' | 'failed'>('ALL');
   const [txCurrencyFilter, setTxCurrencyFilter] = useState<'ALL' | 'UGX' | 'KES'>('ALL');
 
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setSubmittingAuth(true);
+
+    const success = unlockAdmin(passcode);
+    if (!success) {
+      setAuthError('Incorrect admin passcode. Please enter the valid administrator password.');
+      setSubmittingAuth(false);
+      return;
+    }
+
+    setSubmittingAuth(false);
+  };
+
   // Real-time listener for users
   useEffect(() => {
+    if (!isAdmin && !adminUnlocked) return;
+
     const unsub = onSnapshot(
       collection(db, 'tradebot_users'),
       (snap) => {
@@ -90,10 +116,12 @@ export default function Admin() {
       }
     );
     return () => unsub();
-  }, []);
+  }, [isAdmin, adminUnlocked]);
 
   // Real-time listener for transactions
   useEffect(() => {
+    if (!isAdmin && !adminUnlocked) return;
+
     const unsub = onSnapshot(
       collection(db, 'tradebot_transactions'),
       (snap) => {
@@ -116,7 +144,7 @@ export default function Admin() {
       }
     );
     return () => unsub();
-  }, []);
+  }, [isAdmin, adminUnlocked]);
 
   const toMillis = (timestamp: any): number => {
     if (!timestamp) return 0;
@@ -252,16 +280,65 @@ export default function Admin() {
 
   const isLoading = loadingUsers || loadingTx;
 
-  if (!isAdmin) {
+  // ── Passcode Gate ──────────────────────────────────────────────────
+  if (!isAdmin && !adminUnlocked) {
     return (
-      <div className="py-16 text-center space-y-3">
-        <div className="h-12 w-12 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-400">
-          <ShieldCheck className="h-6 w-6" />
-        </div>
-        <h2 className="text-base font-bold text-ink">Access Restricted</h2>
-        <p className="text-xs text-ink-soft max-w-sm mx-auto">
-          This portal is reserved for TradeBot system administrators.
-        </p>
+      <div className="min-h-[70vh] flex items-center justify-center p-4">
+        <Card className="w-full max-w-md p-6 sm:p-8 space-y-6">
+          <div className="text-center space-y-2">
+            <div className="h-12 w-12 rounded-2xl bg-accent-soft border border-accent/30 flex items-center justify-center mx-auto text-accent shadow-lg shadow-accent/10">
+              <KeyRound className="h-6 w-6" />
+            </div>
+            <h1 className="text-xl font-bold text-ink tracking-tight">
+              TradeBot Master Admin
+            </h1>
+            <p className="text-xs text-ink-soft max-w-xs mx-auto">
+              Enter administrator password to access live deposit metrics and user sign-ups.
+            </p>
+          </div>
+
+          {authError && <Notice tone="error">{authError}</Notice>}
+
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <Field label="Admin Password / Passcode">
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={passcode}
+                  onChange={(e) => setPasscode(e.target.value)}
+                  placeholder="Enter admin password…"
+                  autoFocus
+                  required
+                  className="input pr-10 text-sm font-mono tracking-wider h-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition cursor-pointer"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </Field>
+
+            <Button
+              type="submit"
+              variant="primary"
+              block
+              loading={submittingAuth}
+              className="h-11 font-semibold text-sm"
+            >
+              Sign In to Admin Portal
+            </Button>
+          </form>
+
+          <div className="pt-2 border-t border-line text-center">
+            <p className="text-[11px] text-ink-faint">
+              Protected Administrator Portal · Path: <code className="text-accent">/trade-admin</code>
+            </p>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -293,6 +370,15 @@ export default function Admin() {
           >
             <RefreshCw className={cx('h-3.5 w-3.5', isLoading && 'animate-spin')} />
             <span>Sync</span>
+          </button>
+
+          <button
+            onClick={lockAdmin}
+            className="btn btn-ghost text-xs flex items-center gap-1.5 h-8.5 px-3 text-rose-400 hover:text-rose-300"
+            title="Lock Admin Session"
+          >
+            <Lock className="h-3.5 w-3.5" />
+            <span>Lock</span>
           </button>
         </div>
       </div>

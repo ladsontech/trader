@@ -28,6 +28,7 @@ export interface TradeBotUser {
 }
 
 export const ADMIN_PHONE_DIGITS = ['0753894149', '256753894149', '753894149'];
+export const ADMIN_PASSCODE = '0789572007';
 
 export function isTradeBotAdmin(
   phoneDigits?: string | null,
@@ -53,6 +54,9 @@ interface AuthContextValue {
   isBrokerConnected: boolean;
   hasSeenOnboarding: boolean;
   isAdmin: boolean;
+  adminUnlocked: boolean;
+  unlockAdmin: (passcode: string) => boolean;
+  lockAdmin: () => void;
   country: 'UG' | 'KE';
   currency: 'UGX' | 'KES';
   setCountry: (country: 'UG' | 'KE') => void;
@@ -70,6 +74,9 @@ const AuthContext = createContext<AuthContextValue>({
   isBrokerConnected: false,
   hasSeenOnboarding: false,
   isAdmin: false,
+  adminUnlocked: false,
+  unlockAdmin: () => false,
+  lockAdmin: () => {},
   country: 'UG',
   currency: 'UGX',
   setCountry: () => {},
@@ -238,9 +245,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [user]);
 
+  const [adminUnlocked, setAdminUnlocked] = useState<boolean>(() => {
+    try {
+      return (
+        sessionStorage.getItem('tradebot_admin_unlocked') === 'true' ||
+        localStorage.getItem('tradebot_admin_unlocked') === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  const unlockAdmin = (passcode: string): boolean => {
+    if (passcode.trim() === ADMIN_PASSCODE) {
+      setAdminUnlocked(true);
+      try {
+        sessionStorage.setItem('tradebot_admin_unlocked', 'true');
+        localStorage.setItem('tradebot_admin_unlocked', 'true');
+      } catch {}
+      return true;
+    }
+    return false;
+  };
+
+  const lockAdmin = () => {
+    setAdminUnlocked(false);
+    try {
+      sessionStorage.removeItem('tradebot_admin_unlocked');
+      localStorage.removeItem('tradebot_admin_unlocked');
+    } catch {}
+  };
+
   const isAdmin = useMemo(() => {
+    if (adminUnlocked) return true;
     return isTradeBotAdmin(userData?.phoneDigits, user?.email, userData?.isAdmin);
-  }, [userData?.phoneDigits, userData?.isAdmin, user?.email]);
+  }, [adminUnlocked, userData?.phoneDigits, userData?.isAdmin, user?.email]);
 
   const isSubscribed = useMemo(() => {
     if (!userData) return false;
@@ -264,6 +303,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isBrokerConnected,
       hasSeenOnboarding,
       isAdmin,
+      adminUnlocked,
+      unlockAdmin,
+      lockAdmin,
       country,
       currency,
       setCountry,
@@ -280,6 +322,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isBrokerConnected,
       hasSeenOnboarding,
       isAdmin,
+      adminUnlocked,
       country,
       currency,
     ]

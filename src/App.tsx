@@ -63,10 +63,10 @@ function Gate({ children }: { children: React.ReactNode }) {
     return <Navigate to="/welcome" replace />;
   }
 
-  // Settings is always reachable — it is where the sign-out button lives, and
-  // trapping someone in a redirect loop with no way out is worse than showing
-  // them a page with a locked panel on it.
-  if (path === '/settings') return <>{children}</>;
+  // Settings and Admin portals are always reachable directly
+  if (path === '/settings' || path === '/trade-admin' || path === '/admin') {
+    return <>{children}</>;
+  }
 
   if (hasSeenOnboarding && !isSubscribed && path !== '/subscribe') {
     return <Navigate to="/subscribe" replace />;
@@ -111,6 +111,7 @@ function AppRoutes() {
         <Route path="/trades" element={<Trades />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/trade-admin" element={<Admin />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
