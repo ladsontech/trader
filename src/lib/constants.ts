@@ -145,56 +145,81 @@ export interface OnboardingSlide {
   eyebrow: string;
   title: string;
   body: string;
+  painPoint: string;
+  solution: string;
+  manualComparison: string;
+  botComparison: string;
+  statBadge: string;
   points: string[];
 }
 
 export const ONBOARDING: OnboardingSlide[] = [
   {
-    key: 'what',
-    eyebrow: 'What this is',
-    title: 'A trading bot that runs on your own broker account',
+    key: 'emotions',
+    eyebrow: 'The #1 Reason Traders Fail',
+    title: 'Eliminate Emotional Mistakes & Revenge Trading',
     body:
-      'Your money never leaves your broker. TradeBot connects to your Exness or FBS MT5 account and places orders there — you keep full control, and you can withdraw any time.',
+      '90% of retail forex traders lose capital due to psychological traps: panic-closing winners, moving stop losses, and revenge trading after a single bad session.',
+    painPoint: 'Fear, greed, and revenge trading wipe out accounts in minutes.',
+    solution: 'Cold mathematical discipline applied on every single trade without emotion.',
+    manualComparison: '❌ Moving stop losses, revenge trade sizing, panic entries',
+    botComparison: '✅ Fixed ATR stop loss, automated take profit, 0% emotion',
+    statBadge: '0% Emotion · 100% Rule Adherence',
     points: [
-      'Your funds stay with your broker',
-      'Every order is visible in your own MT5 terminal',
-      'Disconnect in one tap, whenever you want',
+      'Strict 0.5% to 1% equity-based lot sizing per trade (never over-leverage)',
+      'Automated Stop Loss & Take Profit set on every order before entry',
+      'Hard daily loss ceiling halts trading if market conditions turn adverse',
     ],
   },
   {
-    key: 'how',
-    eyebrow: 'How it trades',
-    title: 'One rule set, applied without emotion',
+    key: 'time',
+    eyebrow: 'Screen Fatigue & Time',
+    title: 'Stop Staring at Charts 14 Hours Every Day',
     body:
-      'The bot checks the 15-minute chart every quarter hour. It only enters when the trend and the pullback agree, and every single order carries a stop loss and a take profit before it is sent.',
+      'Staring at candles all day causes burnout. You miss the best London & New York session moves while at your day job, commuting, or asleep at night.',
+    painPoint: 'Missing high-probability breakouts while working or sleeping.',
+    solution: '24/5 automated cloud engine checking every 15-minute candle for you.',
+    manualComparison: '❌ Glued to MT5 screen for hours, entering late out of fatigue',
+    botComparison: '✅ 24/5 cloud engine scanning every 15m candle automatically',
+    statBadge: '24/5 Cloud Scanning · Hands-Free',
     points: [
-      'EMA trend filter + RSI pullback trigger',
-      'ATR-sized stop loss on every position',
-      'Most cycles it does nothing — that is the point',
+      'Checks 15-minute timeframe every quarter hour around the clock',
+      'Executes during high-volume London & New York sessions automatically',
+      'Runs hands-free so you can work, commute, and sleep in peace',
     ],
   },
   {
-    key: 'risk',
-    eyebrow: 'Risk first',
-    title: 'Limits it cannot talk itself out of',
+    key: 'security',
+    eyebrow: 'Capital Security',
+    title: 'Your Money NEVER Leaves Your Broker',
     body:
-      'Position size is calculated from your account equity, not guessed. If the day goes badly the bot stops itself before the damage compounds.',
+      'Never send trading funds to third-party platforms or fake account managers. TradeBot connects directly to your own licensed Exness or FBS MT5 broker account.',
+    painPoint: 'Scams, handing money to strangers, and blocked platform withdrawals.',
+    solution: '100% non-custodial API bridge — you keep total control of deposits & withdrawals.',
+    manualComparison: '❌ Sending capital to third-party platforms or signal groups',
+    botComparison: '✅ Funds stay 100% in your own licensed broker (Exness / FBS)',
+    statBadge: '100% Non-Custodial · You Keep Full Control',
     points: [
-      '0.5–1% of equity risked per trade',
-      'Daily loss limit halts trading for the day',
-      'Hard cap on lot size and open positions',
+      'Your funds stay entirely inside your personal MT5 broker account',
+      'Watch every single order execute live on your MetaTrader 5 app',
+      'Deposit and withdraw your money anytime with zero lockup',
     ],
   },
   {
-    key: 'honest',
-    eyebrow: 'Before you pay',
-    title: 'Trading can lose money',
+    key: 'edge',
+    eyebrow: 'Quantitative Strategy',
+    title: 'A Systematic Edge With Demo Account Safety',
     body:
-      'This is an automated strategy, not a guarantee. Leveraged forex carries real risk and past results never promise future ones. Start on a demo account if you want to watch it work first.',
+      'Stop guessing trend directions with 20 conflicting indicators. TradeBot uses algorithmic EMA trend filters and RSI pullbacks, and you can test it on a free MT5 Demo account first.',
+    painPoint: 'Indicator overload, inconsistent rules, and risking real capital untested.',
+    solution: 'Proven algorithmic momentum strategy + full MT5 Demo account compatibility.',
+    manualComparison: '❌ Guessing direction with conflicting indicators & gut feeling',
+    botComparison: '✅ Systematic rules: EMA Trend + RSI Pullback + ATR Protection',
+    statBadge: 'Demo Compatible · Annual Access',
     points: [
-      'Works with MT5 demo accounts too',
-      'Cancel by simply not renewing',
-      'You can pause the bot at any moment',
+      'Fully compatible with MT5 Demo accounts — test before trading real money',
+      'Full 365 days of automated cloud trading execution included',
+      'Instant mobile money payment & activation (MTN, Airtel, M-Pesa)',
     ],
   },
 ];
