@@ -6,8 +6,8 @@ import { useAuth } from '../lib/auth-context';
 import { PLANS, getPlanPrice, planById } from '../lib/constants';
 import { checkPayment, initiateSubscription, apiErrorMessage } from '../lib/api';
 import { formatLocalMoney, remainingLabel, renewalDate } from '../lib/format';
-import { Button, Card, Field, Notice, PageTitle, cx } from '../components/ui';
-import { ArrowRight, Check, CheckCircle2, Smartphone, XCircle } from 'lucide-react';
+import { Button, Card, Field, Notice, cx } from '../components/ui';
+import { ArrowRight, Check, CheckCircle2, Crown, Smartphone, Sparkles, XCircle, Zap } from 'lucide-react';
 
 type TxState = 'idle' | 'waiting' | 'completed' | 'failed';
 
@@ -140,10 +140,12 @@ export default function Subscribe() {
     const active = planById(userData?.subscriptionPlan);
     return (
       <div className="max-w-2xl">
-        <PageTitle
-          title="Your plan"
-          subtitle="Renewals stack onto the time you have left, so paying early never costs you a day."
-        />
+        <header className="mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink">Your plan</h1>
+          <p className="text-xs sm:text-sm text-ink-soft mt-1">
+            Renewals stack onto the time you have left, so paying early never costs you a day.
+          </p>
+        </header>
 
         <Card className="p-5">
           <div className="flex items-start justify-between gap-4">
@@ -174,13 +176,13 @@ export default function Subscribe() {
 
         <div className="mt-8">
           <p className="text-[13px] text-ink-soft mb-3">Renew or change plan</p>
-          <PlanGrid
+          <PlanCards
             selected={selected}
             onSelect={setSelected}
             currency={currency}
             locked={false}
           />
-          <div className="mt-4">
+          <div className="mt-5">
             <PayForm
               phone={phone}
               setPhone={setPhone}
@@ -226,56 +228,59 @@ export default function Subscribe() {
 
   /* ── Choose and pay ─────────────────────────────────────────── */
   return (
-    <div className="max-w-2xl">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink-base">
-            Choose your plan
-          </h1>
-          <p className="text-xs sm:text-sm text-ink-soft mt-1">
-            {isKenya
-              ? 'One payment covers a full year via Safaricom M-Pesa. The bot starts as soon as you connect your broker.'
-              : 'One payment covers a full year via MTN or Airtel Mobile Money. The bot starts as soon as you connect your broker.'}
-          </p>
-        </div>
+    <div className="max-w-2xl fade-up">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink">
+          Choose your plan
+        </h1>
+        <p className="text-sm text-ink-soft mt-2 max-w-md mx-auto leading-relaxed">
+          {isKenya
+            ? 'One payment covers a full year via Safaricom M-Pesa. The bot starts as soon as you connect your broker.'
+            : 'One payment covers a full year via MTN or Airtel Mobile Money. The bot starts as soon as you connect your broker.'}
+        </p>
 
         {/* Region Switcher */}
-        <div className="flex items-center gap-1 bg-surface border border-line p-1 rounded-xl shrink-0 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setCountry('UG')}
-            className={cx(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer',
-              country === 'UG'
-                ? 'bg-raised text-ink-base border border-line-strong shadow-xs'
-                : 'text-ink-muted hover:text-ink-base'
-            )}
-          >
-            <span>🇺🇬</span> UGX
-          </button>
-          <button
-            type="button"
-            onClick={() => setCountry('KE')}
-            className={cx(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer',
-              country === 'KE'
-                ? 'bg-raised text-ink-base border border-line-strong shadow-xs'
-                : 'text-ink-muted hover:text-ink-base'
-            )}
-          >
-            <span>🇰🇪</span> KES
-          </button>
+        <div className="flex items-center justify-center gap-1 mt-4">
+          <div className="flex items-center gap-1 bg-surface border border-line p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setCountry('UG')}
+              className={cx(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer',
+                country === 'UG'
+                  ? 'bg-raised text-ink border border-line-strong shadow-xs'
+                  : 'text-ink-faint hover:text-ink-soft'
+              )}
+            >
+              <span>🇺🇬</span> UGX
+            </button>
+            <button
+              type="button"
+              onClick={() => setCountry('KE')}
+              className={cx(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer',
+                country === 'KE'
+                  ? 'bg-raised text-ink border border-line-strong shadow-xs'
+                  : 'text-ink-faint hover:text-ink-soft'
+              )}
+            >
+              <span>🇰🇪</span> KES
+            </button>
+          </div>
         </div>
       </div>
 
-      <PlanGrid
+      {/* Plan cards */}
+      <PlanCards
         selected={selected}
         onSelect={setSelected}
         currency={currency}
         locked={state === 'waiting'}
       />
 
-      <div className="mt-5 space-y-3">
+      {/* Payment area */}
+      <div className="mt-6 space-y-3">
         {state === 'waiting' && (
           <Notice tone="warn" title="Check your phone">
             {isKenya
@@ -311,7 +316,7 @@ export default function Subscribe() {
         )}
       </div>
 
-      <p className="mt-5 text-[11px] text-ink-faint leading-relaxed">
+      <p className="mt-6 text-[11px] text-ink-faint leading-relaxed text-center">
         Payments are collected securely via Mobile Money & M-Pesa. Your subscription is
         activated by our automated payment server once the provider confirms the transaction.
       </p>
@@ -321,7 +326,7 @@ export default function Subscribe() {
 
 /* ── Pieces ───────────────────────────────────────────────────── */
 
-function PlanGrid({
+function PlanCards({
   selected,
   onSelect,
   currency,
@@ -333,10 +338,12 @@ function PlanGrid({
   locked: boolean;
 }) {
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
+    <div className="grid sm:grid-cols-2 gap-4">
       {PLANS.map((p) => {
         const active = selected === p.id;
         const price = getPlanPrice(p, currency);
+        const isPremium = p.recommended;
+
         return (
           <button
             key={p.id}
@@ -344,45 +351,83 @@ function PlanGrid({
             disabled={locked}
             onClick={() => onSelect(p.id)}
             className={cx(
-              'text-left p-4 rounded-[14px] border transition-colors cursor-pointer disabled:cursor-not-allowed',
+              'plan-card group relative text-center p-5 pt-6 rounded-[18px] border-2 transition-all duration-200 cursor-pointer disabled:cursor-not-allowed',
               active
-                ? 'border-accent/50 bg-accent/[0.04]'
-                : 'border-line bg-surface hover:border-line-strong'
+                ? isPremium
+                  ? 'border-accent bg-accent/[0.05] shadow-[0_0_24px_-4px_rgba(45,212,167,0.2)]'
+                  : 'border-accent/60 bg-accent/[0.03]'
+                : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2'
             )}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-[15px] font-semibold">{p.name}</h3>
-                  {p.recommended && (
-                    <span className="chip border-accent/30 text-accent">Most popular</span>
-                  )}
-                </div>
-                <p className="text-[12px] text-ink-faint mt-0.5">{p.tagline}</p>
+            {/* Popular badge */}
+            {isPremium && (
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-[11px] font-bold uppercase tracking-wider text-[#06231b] shadow-md">
+                  <Crown className="w-3 h-3" />
+                  Popular
+                </span>
               </div>
-              <span
-                className={cx(
-                  'w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center border',
-                  active ? 'bg-accent border-accent text-canvas' : 'border-line-strong'
-                )}
-              >
-                {active && <Check className="w-3 h-3" strokeWidth={3} />}
-              </span>
+            )}
+
+            {/* Plan icon */}
+            <div className={cx(
+              'w-10 h-10 rounded-[12px] flex items-center justify-center mx-auto mb-3',
+              active
+                ? 'bg-accent/15 text-accent'
+                : 'bg-surface-2 border border-line text-ink-faint'
+            )}>
+              {isPremium ? <Sparkles className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
             </div>
 
-            <p className="tnum text-[22px] mt-3 font-bold text-ink-base">
-              {formatLocalMoney(price, currency)}
-              <span className="font-sans text-[12px] text-ink-faint"> / year</span>
+            {/* Plan name */}
+            <h3 className="text-[16px] font-bold text-ink">{p.name}</h3>
+
+            {/* Price */}
+            <p className="mt-3 mb-1">
+              <span className="tnum text-[28px] font-extrabold text-ink leading-none">
+                {formatLocalMoney(price, currency)}
+              </span>
+            </p>
+            <span className="text-[12px] text-ink-faint font-medium">/ year</span>
+
+            {/* Tagline */}
+            <p className="text-[12px] text-ink-soft mt-3 leading-relaxed px-2">
+              {p.tagline}
             </p>
 
-            <ul className="mt-3 space-y-1.5">
+            {/* Divider */}
+            <div className="w-10 h-px bg-line mx-auto my-4" />
+
+            {/* Features */}
+            <ul className="space-y-2.5 text-left">
               {p.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-[12.5px] text-ink-soft">
-                  <Check className="w-3 h-3 text-accent shrink-0 mt-1" strokeWidth={3} />
+                <li key={f} className="flex items-start gap-2.5 text-[12.5px] text-ink-soft">
+                  <span className={cx(
+                    'w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5',
+                    active ? 'bg-accent/15 text-accent' : 'bg-surface-3 text-ink-faint'
+                  )}>
+                    <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                  </span>
                   <span>{f}</span>
                 </li>
               ))}
             </ul>
+
+            {/* Select button */}
+            <div className={cx(
+              'mt-5 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all duration-200',
+              active
+                ? 'bg-accent text-[#06231b]'
+                : 'bg-surface-2 border border-line text-ink-soft group-hover:border-line-strong'
+            )}>
+              {active ? (
+                <span className="flex items-center justify-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Selected
+                </span>
+              ) : (
+                `Get ${p.name}`
+              )}
+            </div>
           </button>
         );
       })}
@@ -443,7 +488,7 @@ function PayForm({
 
         <div className="flex items-center justify-between pt-1">
           <span className="text-[13px] text-ink-soft">Total today</span>
-          <span className="tnum text-[15px] font-semibold text-ink-base">
+          <span className="tnum text-[15px] font-semibold text-ink">
             {formatLocalMoney(amount, currency)}
           </span>
         </div>

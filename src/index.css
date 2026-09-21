@@ -237,6 +237,25 @@
   }
 }
 
+@layer components {
+  .plan-card {
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.2s ease,
+                background-color 0.2s ease,
+                box-shadow 0.2s ease;
+  }
+  .plan-card:not(:disabled):hover {
+    transform: translateY(-2px);
+  }
+  .plan-card:not(:disabled):active {
+    transform: translateY(0);
+  }
+
+  .bg-raised {
+    background: var(--color-surface-2);
+  }
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
