@@ -354,7 +354,7 @@ function PlanCards({
               'plan-card group relative text-center p-5 pt-6 rounded-[18px] border-2 transition-all duration-200 cursor-pointer disabled:cursor-not-allowed',
               active
                 ? isPremium
-                  ? 'border-accent bg-accent/[0.05] shadow-[0_0_24px_-4px_rgba(45,212,167,0.2)]'
+                  ? 'border-accent bg-accent/[0.05] shadow-[0_0_24px_-4px_rgba(14,159,119,0.18)]'
                   : 'border-accent/60 bg-accent/[0.03]'
                 : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2'
             )}
@@ -362,7 +362,7 @@ function PlanCards({
             {/* Popular badge */}
             {isPremium && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-[11px] font-bold uppercase tracking-wider text-[#06231b] shadow-md">
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-[11px] font-bold uppercase tracking-wider text-[#ffffff] shadow-md">
                   <Crown className="w-3 h-3" />
                   Popular
                 </span>
@@ -417,7 +417,7 @@ function PlanCards({
             <div className={cx(
               'mt-5 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all duration-200',
               active
-                ? 'bg-accent text-[#06231b]'
+                ? 'bg-accent text-[#ffffff]'
                 : 'bg-surface-2 border border-line text-ink-soft group-hover:border-line-strong'
             )}>
               {active ? (

@@ -327,7 +327,7 @@ export default function Admin() {
             <span className="text-[11px] font-bold uppercase tracking-wider text-ink-soft">
               Total KES Deposits
             </span>
-            <div className="h-7 w-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+            <div className="h-7 w-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
               <TrendingUp className="h-4 w-4" />
             </div>
           </div>
@@ -346,7 +346,7 @@ export default function Admin() {
               Active Bots
             </span>
             <div className="h-7 w-7 rounded-lg bg-surface-2 flex items-center justify-center text-ink-soft">
-              <Bot className="h-4 w-4 text-emerald-400" />
+              <Bot className="h-4 w-4 text-emerald-600" />
             </div>
           </div>
           <p className="tnum text-2xl sm:text-3xl font-extrabold text-ink mt-2">
@@ -429,7 +429,7 @@ export default function Admin() {
 
                 <div className="flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-line">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+                    <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600">
                       <Zap className="h-4 w-4" />
                     </div>
                     <div>
@@ -453,31 +453,31 @@ export default function Admin() {
               />
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400 mx-auto" />
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 mx-auto" />
                   <p className="tnum text-lg font-bold text-ink mt-1">
                     {metrics.totalCompletedCount}
                   </p>
-                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mt-0.5">
+                  <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mt-0.5">
                     Completed
                   </p>
                 </div>
 
                 <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                  <Clock className="h-4 w-4 text-amber-400 mx-auto" />
+                  <Clock className="h-4 w-4 text-amber-600 mx-auto" />
                   <p className="tnum text-lg font-bold text-ink mt-1">
                     {metrics.totalPendingCount}
                   </p>
-                  <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mt-0.5">
+                  <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mt-0.5">
                     Pending
                   </p>
                 </div>
 
                 <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                  <XCircle className="h-4 w-4 text-rose-400 mx-auto" />
+                  <XCircle className="h-4 w-4 text-rose-600 mx-auto" />
                   <p className="tnum text-lg font-bold text-ink mt-1">
                     {metrics.totalFailedCount}
                   </p>
-                  <p className="text-[10px] font-bold text-rose-400 uppercase tracking-wider mt-0.5">
+                  <p className="text-[10px] font-bold text-rose-600 uppercase tracking-wider mt-0.5">
                     Failed
                   </p>
                 </div>
@@ -490,7 +490,7 @@ export default function Admin() {
                 </div>
                 <div className="flex justify-between">
                   <span>Brokers Live Trading:</span>
-                  <span className="font-bold text-emerald-400">{metrics.activeBots}</span>
+                  <span className="font-bold text-emerald-600">{metrics.activeBots}</span>
                 </div>
               </div>
             </Card>
@@ -530,7 +530,7 @@ export default function Admin() {
                     </div>
                     <div>
                       {u.subscriptionStatus === 'active' ? (
-                        <span className="chip text-[10px] text-emerald-400 border-emerald-500/25">
+                        <span className="chip text-[10px] text-emerald-600 border-emerald-500/25">
                           Active · {u.subscriptionPlan || 'Bot'}
                         </span>
                       ) : (
@@ -649,7 +649,7 @@ export default function Admin() {
                         <td className="px-3.5 py-3">
                           {isAct ? (
                             <div>
-                              <span className="chip text-[10px] font-bold text-emerald-400 border-emerald-500/25">
+                              <span className="chip text-[10px] font-bold text-emerald-600 border-emerald-500/25">
                                 Active · {u.subscriptionPlan || 'Bot'}
                               </span>
                               {u.subscriptionExpiresAt && (
@@ -659,7 +659,7 @@ export default function Admin() {
                               )}
                             </div>
                           ) : u.subscriptionStatus === 'expired' ? (
-                            <span className="chip text-[10px] text-amber-400 border-amber-500/25">
+                            <span className="chip text-[10px] text-amber-600 border-amber-500/25">
                               Expired
                             </span>
                           ) : (
@@ -672,7 +672,7 @@ export default function Admin() {
                         <td className="px-3.5 py-3">
                           {u.brokerConnected ? (
                             <div>
-                              <span className="chip text-[10px] text-emerald-400 font-semibold">
+                              <span className="chip text-[10px] text-emerald-600 font-semibold">
                                 {u.broker?.toUpperCase() || 'MT5'} Connected
                               </span>
                               {u.brokerAccountId && (
@@ -688,7 +688,7 @@ export default function Admin() {
 
                         <td className="px-3.5 py-3">
                           {u.botEnabled ? (
-                            <span className="chip text-[10px] text-emerald-400">
+                            <span className="chip text-[10px] text-emerald-600">
                               <StatusDot tone="up" /> Live Trading
                             </span>
                           ) : (
@@ -763,10 +763,10 @@ export default function Admin() {
             </p>
 
             <div className="flex items-center gap-3">
-              <span className="chip text-[10px] text-emerald-400 font-bold">
+              <span className="chip text-[10px] text-emerald-600 font-bold">
                 UGX {metrics.totalUgx.toLocaleString()}
               </span>
-              <span className="chip text-[10px] text-emerald-400 font-bold">
+              <span className="chip text-[10px] text-emerald-600 font-bold">
                 KES {metrics.totalKes.toLocaleString()}
               </span>
             </div>
@@ -818,15 +818,15 @@ export default function Admin() {
 
                         <td className="px-3.5 py-3">
                           {status === 'completed' ? (
-                            <span className="chip text-[10px] font-bold text-emerald-400 border-emerald-500/25">
+                            <span className="chip text-[10px] font-bold text-emerald-600 border-emerald-500/25">
                               ✓ Completed
                             </span>
                           ) : status === 'pending' ? (
-                            <span className="chip text-[10px] font-bold text-amber-400 border-amber-500/25">
+                            <span className="chip text-[10px] font-bold text-amber-600 border-amber-500/25">
                               ⏳ Pending
                             </span>
                           ) : (
-                            <span className="chip text-[10px] font-bold text-rose-400 border-rose-500/25">
+                            <span className="chip text-[10px] font-bold text-rose-600 border-rose-500/25">
                               ✗ Failed
                             </span>
                           )}

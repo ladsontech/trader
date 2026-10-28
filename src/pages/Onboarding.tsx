@@ -50,13 +50,13 @@ export default function Onboarding() {
   const getSlideIcon = (key: string) => {
     switch (key) {
       case 'emotions':
-        return <TrendingDown className="w-4 h-4 text-rose-400" />;
+        return <TrendingDown className="w-4 h-4 text-rose-600" />;
       case 'time':
-        return <Zap className="w-4 h-4 text-amber-400" />;
+        return <Zap className="w-4 h-4 text-amber-600" />;
       case 'security':
         return <Lock className="w-4 h-4 text-accent" />;
       case 'edge':
-        return <TrendingUp className="w-4 h-4 text-emerald-400" />;
+        return <TrendingUp className="w-4 h-4 text-emerald-600" />;
       default:
         return <Bot className="w-4 h-4 text-accent" />;
     }
@@ -110,8 +110,8 @@ export default function Onboarding() {
                 </span>
               </div>
 
-              <span className="chip text-[10.5px] font-semibold text-emerald-400 border-emerald-500/25 bg-emerald-500/5">
-                <Sparkles className="w-3 h-3 mr-1 text-emerald-400" />
+              <span className="chip text-[10.5px] font-semibold text-emerald-600 border-emerald-500/25 bg-emerald-500/5">
+                <Sparkles className="w-3 h-3 mr-1 text-emerald-600" />
                 {slide.statBadge}
               </span>
             </div>
@@ -130,9 +130,9 @@ export default function Onboarding() {
             <div className="rounded-xl border border-line bg-surface-2/60 p-4 space-y-3">
               {/* The Real Pain */}
               <div className="flex items-start gap-3 p-3 rounded-lg bg-rose-500/5 border border-rose-500/15">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 <div className="text-xs space-y-0.5">
-                  <p className="font-bold text-rose-300 uppercase tracking-wider text-[10px]">
+                  <p className="font-bold text-rose-700 uppercase tracking-wider text-[10px]">
                     The Manual Trader's Pain
                   </p>
                   <p className="text-ink-soft leading-relaxed">
@@ -143,9 +143,9 @@ export default function Onboarding() {
 
               {/* The TradeBot Solution */}
               <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div className="text-xs space-y-0.5">
-                  <p className="font-bold text-emerald-300 uppercase tracking-wider text-[10px]">
+                  <p className="font-bold text-emerald-700 uppercase tracking-wider text-[10px]">
                     How TradeBot Solves It
                   </p>
                   <p className="text-ink-soft leading-relaxed">
@@ -157,10 +157,10 @@ export default function Onboarding() {
 
             {/* Comparison Quick Strips */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <div className="px-3 py-2 rounded-lg bg-surface border border-rose-500/20 text-rose-300/90 font-medium">
+              <div className="px-3 py-2 rounded-lg bg-surface border border-rose-500/20 text-rose-700/90 font-medium">
                 {slide.manualComparison}
               </div>
-              <div className="px-3 py-2 rounded-lg bg-surface border border-emerald-500/20 text-emerald-300/90 font-medium">
+              <div className="px-3 py-2 rounded-lg bg-surface border border-emerald-500/20 text-emerald-700/90 font-medium">
                 {slide.botComparison}
               </div>
             </div>

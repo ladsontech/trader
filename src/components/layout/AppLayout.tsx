@@ -30,7 +30,7 @@ function SetupSteps({ step }: { step: 2 | 3 }) {
               aria-current={current ? 'step' : undefined}
               className={cx(
                 'flex items-center gap-1.5 h-7 rounded-full px-2.5 text-[12px] font-semibold border',
-                current && 'bg-accent text-[#06231b] border-accent',
+                current && 'bg-accent text-[#ffffff] border-accent',
                 done && 'border-accent/30 text-accent bg-accent-soft',
                 !current && !done && 'border-line text-ink-faint'
               )}
