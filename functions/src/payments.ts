@@ -501,7 +501,12 @@ export const tbMarzPayWebhook = onRequest(
       const data = doc.data()!;
       const canonicalReference = (data.reference as string) || doc.id;
 
-      if (data.status === "completed" || data.status === "failed") {
+      // If already completed, or failed for reasons other than user cancellation, ignore.
+      // If the user cancelled locally but then completed on handset, activate anyway.
+      if (
+        data.status === "completed" ||
+        (data.status === "failed" && data.failureReason !== "Cancelled by user.")
+      ) {
         res.status(200).send("Already processed");
         return;
       }
@@ -580,7 +585,10 @@ export const tbCheckPayment = onCall(marzPayCallableOptions, async (request) => 
   }
 
   const tx = txDoc.data()!;
-  if (tx.status === "completed" || tx.status === "failed") {
+  if (
+    tx.status === "completed" ||
+    (tx.status === "failed" && tx.failureReason !== "Cancelled by user.")
+  ) {
     return { status: tx.status, failureReason: tx.failureReason || null };
   }
 

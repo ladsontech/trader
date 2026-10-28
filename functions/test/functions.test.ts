@@ -18,6 +18,7 @@ import {
   tbCheckPayment,
   tbInitiateSubscription,
   tbMarzPayWebhook,
+  tbCancelPayment,
   marzPayTransactionStatus,
   validMarzPaySignature,
 } from "../src/payments";
@@ -122,6 +123,53 @@ describe("payments", () => {
   it("another user cannot poll someone else's payment", async () => {
     const { res } = await startPayment();
     await expect((tbCheckPayment as any).run({ data: { reference: res.reference }, auth: auth("u2") })).rejects.toThrow(/not found/i);
+  });
+
+  it("user can cancel a pending payment prompt", async () => {
+    const { res } = await startPayment();
+    const cancelled = await (tbCancelPayment as any).run({
+      data: { reference: res.reference },
+      auth: auth("u1"),
+    });
+    expect(cancelled).toEqual({ success: true });
+    const tx = store.docs.get(`tradebot_transactions/${res.reference}`)!;
+    expect(tx.status).toBe("failed");
+    expect(tx.failureReason).toBe("Cancelled by user.");
+    expect(store.docs.get("tradebot_active_payments/u1")).toBeUndefined();
+  });
+
+  it("paid after cancelling: activates anyway if Marz Pay confirms payment after user clicked cancel", async () => {
+    const { res } = await startPayment();
+    await (tbCancelPayment as any).run({
+      data: { reference: res.reference },
+      auth: auth("u1"),
+    });
+    expect(store.docs.get(`tradebot_transactions/${res.reference}`)!.status).toBe("failed");
+
+    vi.stubGlobal(
+      "fetch",
+      fakeFetch([
+        {
+          match: "/collect-money/mp-uuid-1",
+          json: { status: "success", data: { transaction: { status: "completed" } } },
+        },
+      ]).fn
+    );
+    const out = makeRes();
+    await (tbMarzPayWebhook as any)(
+      webhookReq({
+        event_type: "collection.completed",
+        transaction: { reference: res.reference, status: "completed" },
+      }),
+      out
+    );
+    expect(out.body).toBe("Completed");
+    expect(userDoc("u1")).toMatchObject({
+      subscriptionStatus: "active",
+      subscriptionPlan: "standard",
+    });
+    const txAfter = store.docs.get(`tradebot_transactions/${res.reference}`)!;
+    expect(txAfter.status).toBe("completed");
   });
 
   it("reads the nested transaction status", () => {
