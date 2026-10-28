@@ -20,7 +20,7 @@ import {
 } from "./metaapi";
 import { logError, logInfo, sanitizeText } from "./util";
 
-const brokerOptions = { secrets: [METAAPI_TOKEN, BROKER_ENC_KEY], timeoutSeconds: 300 };
+const brokerOptions = { secrets: [METAAPI_TOKEN, BROKER_ENC_KEY], timeoutSeconds: 540 };
 
 async function requireActiveSubscription(uid: string) {
   const userDoc = await db.collection(COL.users).doc(uid).get();
@@ -127,6 +127,8 @@ export const tbConnectBroker = onCall(brokerOptions, async (request) => {
         passwordEncrypted: encryptSecret(password, BROKER_ENC_KEY.value()),
         metaApiAccountId: metaAccountId,
         region,
+        symbolMap: {},
+        symbolMapAt: 0,
         magic: magicForUser(uid),
         connected: true,
         connectionStatus: account.connectionStatus,

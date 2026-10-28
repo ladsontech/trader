@@ -15,8 +15,8 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((r) => server.listen(4400, r));
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
-const screens = ['auth', 'onboarding', 'subscribe', 'dashboard', 'trades', 'broker', 'settings'];
+const browser = await chromium.launch();
+const screens = ['auth', 'subscribe&setup=plan', 'broker&setup=broker', 'dashboard', 'trades', 'broker', 'subscribe', 'settings'];
 fs.mkdirSync('shots', { recursive: true });
 
 for (const [name, size] of [['desktop', { width: 1280, height: 900 }], ['mobile', { width: 390, height: 844 }]]) {
@@ -25,7 +25,7 @@ for (const [name, size] of [['desktop', { width: 1280, height: 900 }], ['mobile'
   for (const screen of screens) {
     await page.goto(`http://127.0.0.1:4400/?screen=${screen}`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(700);
-    await page.screenshot({ path: `shots/${name}-${screen}.png`, fullPage: true });
+    await page.screenshot({ path: `shots/${name}-${screen.replace(/[&=]/g, '-')}.png`, fullPage: true });
   }
   await ctx.close();
 }

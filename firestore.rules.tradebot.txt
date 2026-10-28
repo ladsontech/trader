@@ -43,11 +43,16 @@
     match /tradebot_users/{userId} {
       allow read: if isAdmin() || tbOwner(userId);
 
-      // A fresh profile only — never one that arrives pre-subscribed.
+      // A fresh profile only — never one that arrives pre-subscribed, with a
+      // broker, or flagged as admin. (Updated 2026-10-28: the browser used to
+      // be able to create its profile with isAdmin: true or any extra field.)
       allow create: if tbOwner(userId)
+        && request.resource.data.keys().hasOnly([
+             'phoneDigits', 'country', 'currency', 'subscriptionStatus',
+             'brokerConnected', 'botEnabled', 'createdAt', 'onboardedAt'])
         && request.resource.data.get('subscriptionStatus', 'none') == 'none'
-        && !('subscriptionPlan' in request.resource.data.keys())
-        && request.resource.data.get('brokerConnected', false) == false;
+        && request.resource.data.get('brokerConnected', false) == false
+        && request.resource.data.get('botEnabled', false) == false;
 
       allow update: if tbOwner(userId) && tbClientWritableOnly();
 

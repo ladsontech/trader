@@ -11,6 +11,7 @@
  */
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import * as crypto from "crypto";
 import { db } from "./firebase";
 import {
   COL,
@@ -199,7 +200,9 @@ export const tbInitiateSubscription = onCall(
       }
 
       const providerIds = extractProviderIds(result);
-      const providerReference = providerIds.find((id) => id !== reference);
+      const providerUuid = marzPayTransactionUuid(result);
+      const providerReference =
+        providerUuid || providerIds.find((id) => id !== reference);
 
       const pendingBatch = db.batch();
       pendingBatch.set(
@@ -208,6 +211,7 @@ export const tbInitiateSubscription = onCall(
           status: "pending",
           ...(providerIds.length ? { providerIds } : {}),
           ...(providerReference ? { providerReference } : {}),
+          ...(providerUuid ? { providerUuid } : {}),
           providerSnapshot: providerSnapshot(result),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
@@ -227,7 +231,8 @@ export const tbInitiateSubscription = onCall(
         reused: false,
         reference,
         planId: plan.id,
-        amount: plan.price,
+        amount: planPrice,
+        currency,
       };
     } catch (error) {
       if (error instanceof HttpsError) throw error;
@@ -250,6 +255,89 @@ export const tbInitiateSubscription = onCall(
     }
   }
 );
+
+
+/* ────────────────────────────────────────────────────────────────
+ * Provider verification
+ *
+ * A callback or a poll is only a HINT. Before a plan is activated we ask
+ * Marz Pay ourselves what happened to the collection. Without this, anyone
+ * who knows their own payment reference (the browser receives it) could POST
+ * a fake "completed" callback to tbMarzPayWebhook and get a free plan.
+ * ──────────────────────────────────────────────────────────────── */
+type ProviderVerdict = "completed" | "failed" | "pending";
+
+/** MarzPay returns { status: "success", data: { transaction: { uuid, status } } }. */
+export function marzPayTransactionUuid(result: unknown): string | undefined {
+  const r = result as { data?: { transaction?: { uuid?: unknown } }; transaction?: { uuid?: unknown } };
+  const uuid = r?.data?.transaction?.uuid ?? r?.transaction?.uuid;
+  return typeof uuid === "string" && uuid.trim() ? uuid.trim() : undefined;
+}
+
+/**
+ * Reads the TRANSACTION status from a Marz Pay response. The top-level
+ * `status: "success"` only means the API call worked — it must never be
+ * mistaken for a completed payment.
+ */
+export function marzPayTransactionStatus(result: unknown): string | undefined {
+  const r = (result || {}) as Record<string, any>;
+  const root = r.data && typeof r.data === "object" ? r.data : r;
+  const candidates = [
+    root?.transaction?.status,
+    root?.collection?.status,
+    r?.transaction?.status,
+    r?.collection?.status,
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/**
+ * Optional extra: if webhook signing is enabled in the Marz Pay dashboard and
+ * MARZPAY_WEBHOOK_SECRET is set in functions/.env, a correctly signed callback
+ * is trusted as-is. X-MarzPay-Signature = "t=<ts>,v1=<hmac_sha256(ts + "." + rawBody)>".
+ */
+export function validMarzPaySignature(rawBody: Buffer | string | undefined, timestamp?: string, signature?: string): boolean {
+  const secret = (process.env.MARZPAY_WEBHOOK_SECRET || "").trim();
+  if (!secret || !rawBody || !timestamp || !signature) return false;
+  const v1 = /v1=([a-f0-9]+)/.exec(signature)?.[1];
+  if (!v1) return false;
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(`${timestamp}.${typeof rawBody === "string" ? rawBody : rawBody.toString("utf8")}`)
+    .digest("hex");
+  return expected.length === v1.length && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1));
+}
+
+export async function verifyWithMarzPay(tx: FirebaseFirestore.DocumentData): Promise<ProviderVerdict> {
+  const authHeader = marzPayAuthHeader(MARZPAY_API_KEY.value());
+  const ids = [tx.providerUuid, tx.providerReference, tx.reference].filter(
+    (v, i, a): v is string => typeof v === "string" && !!v && a.indexOf(v) === i
+  );
+  const paths: string[] = [];
+  for (const id of ids) {
+    paths.push(`/collect-money/${encodeURIComponent(id)}`, `/transactions/${encodeURIComponent(id)}`);
+  }
+  for (const path of paths) {
+    try {
+      const response = await fetch(`${MARZPAY_BASE_URL}${path}`, {
+        headers: { Authorization: authHeader, Accept: "application/json" },
+      });
+      if (!response.ok) continue;
+      const result = await response.json().catch(() => ({}));
+      const status = marzPayTransactionStatus(result);
+      if (!status) continue;
+      if (isSuccessStatus(status)) return "completed";
+      if (isFailureStatus(status)) return "failed";
+      return "pending";
+    } catch (error) {
+      logError("Marz Pay status lookup failed", error, { path: path.split("/")[1] });
+    }
+  }
+  return "pending";
+}
 
 /* ────────────────────────────────────────────────────────────────
  * Activation (single writer for subscription state)
@@ -428,19 +516,42 @@ export const tbMarzPayWebhook = onRequest(
         { merge: true }
       );
 
-      if (isSuccessStatus(fields.providerStatus, fields.eventType)) {
+      const claimsSuccess = isSuccessStatus(fields.providerStatus, fields.eventType);
+      const claimsFailure = isFailureStatus(fields.providerStatus, fields.eventType);
+      if (!claimsSuccess && !claimsFailure) {
+        res.status(200).send("Pending");
+        return;
+      }
+
+      // Never trust the callback body on its own — confirm with Marz Pay,
+      // unless it carries a valid signature from our webhook secret.
+      const signed = validMarzPaySignature(
+        (req as unknown as { rawBody?: Buffer }).rawBody,
+        req.get("x-marzpay-timestamp") || undefined,
+        req.get("x-marzpay-signature") || undefined
+      );
+      const verdict: ProviderVerdict = signed
+        ? claimsSuccess
+          ? "completed"
+          : "failed"
+        : await verifyWithMarzPay(data);
+      if (verdict === "completed") {
         await activateSubscription(canonicalReference);
         res.status(200).send("Completed");
         return;
       }
-
-      if (isFailureStatus(fields.providerStatus, fields.eventType)) {
+      if (verdict === "failed") {
         await failTransaction(
           canonicalReference,
           fields.failureReason || "The mobile money payment was declined or timed out."
         );
         res.status(200).send("Failed");
         return;
+      }
+      if (claimsSuccess) {
+        logInfo("Webhook claimed success but Marz Pay does not confirm it yet", {
+          reference: canonicalReference,
+        });
       }
 
       res.status(200).send("Pending");
@@ -475,25 +586,15 @@ export const tbCheckPayment = onCall(marzPayCallableOptions, async (request) => 
 
   // Ask Marz Pay directly, in case the callback never arrived.
   try {
-    const authHeader = marzPayAuthHeader(MARZPAY_API_KEY.value());
-    const response = await fetch(
-      `${MARZPAY_BASE_URL}/transactions/${encodeURIComponent(reference)}`,
-      { headers: { Authorization: authHeader, Accept: "application/json" } }
-    );
-    const result = await response.json().catch(() => ({}));
-
-    if (response.ok) {
-      const fields = extractWebhookFields(result);
-      if (isSuccessStatus(fields.providerStatus, fields.eventType)) {
-        await activateSubscription(reference);
-        return { status: "completed", failureReason: null };
-      }
-      if (isFailureStatus(fields.providerStatus, fields.eventType)) {
-        const reason =
-          fields.failureReason || "The mobile money payment was declined or timed out.";
-        await failTransaction(reference, reason);
-        return { status: "failed", failureReason: sanitizeText(reason) };
-      }
+    const verdict = await verifyWithMarzPay(tx);
+    if (verdict === "completed") {
+      await activateSubscription(reference);
+      return { status: "completed", failureReason: null };
+    }
+    if (verdict === "failed") {
+      const reason = "The mobile money payment was declined or timed out.";
+      await failTransaction(reference, reason);
+      return { status: "failed", failureReason: reason };
     }
   } catch (error) {
     logError("Payment status poll failed", error, { reference });

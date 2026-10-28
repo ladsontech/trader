@@ -10,6 +10,7 @@ import ConnectBroker from '../src/pages/ConnectBroker';
 import Dashboard from '../src/pages/Dashboard';
 import Trades from '../src/pages/Trades';
 import Settings from '../src/pages/Settings';
+import App from '../src/App';
 
 const screen = new URLSearchParams(location.search).get('screen') || 'dashboard';
 
@@ -30,7 +31,9 @@ const root = createRoot(document.getElementById('root')!);
 
 root.render(
   <StrictMode>
-    {chromeless[screen] ? (
+    {screen === 'flow' ? (
+      <App />
+    ) : chromeless[screen] ? (
       <MemoryRouter>{chromeless[screen]}</MemoryRouter>
     ) : (
       <MemoryRouter initialEntries={[inApp[screen].path]}>

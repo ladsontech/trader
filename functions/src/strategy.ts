@@ -99,7 +99,7 @@ const RSI_PERIOD = 14;
 const ATR_PERIOD = 14;
 
 /**
- * Candles must be oldest → newest.
+ * Candles must be oldest → newest and CLOSED (drop the one still forming).
  * Returns null when no rule fires — which is most of the time, by design.
  */
 export function evaluate(candles: Candle[]): Signal | null {
@@ -124,9 +124,9 @@ export function evaluate(candles: Candle[]): Signal | null {
   }
   if (atrNow <= 0) return null;
 
-  // Spread sanity: skip a symbol whose spread eats more than 25% of ATR.
-  const spread = candles[i].spread || 0;
-  if (spread > 0 && spread > atrNow * 0.25) return null;
+  // Spread is checked by the caller against the live bid/ask: the candle's
+  // own `spread` field is in points, not price, so comparing it with ATR
+  // here would block every trade.
 
   const separation = Math.abs(fastNow - slowNow) / atrNow;
   // Require a real trend, not noise around a flat pair.
@@ -215,3 +215,29 @@ export const STRATEGY_META = {
   atrPeriod: ATR_PERIOD,
   timeframe: "15m",
 };
+
+/** Live spread must not eat more than this share of the ATR. */
+export const MAX_SPREAD_ATR_RATIO = 0.25;
+
+/**
+ * Brokers rename symbols per account type: Exness Standard uses "EURUSDm",
+ * some FBS accounts "EURUSD." or "EURUSD-ecn". Map each plan symbol to the
+ * name this account actually uses, or leave it out if the account lacks it.
+ */
+export function resolveSymbols(wanted: string[], available: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const clean = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  for (const base of wanted) {
+    const exact = available.find((s) => s === base);
+    if (exact) {
+      out[base] = exact;
+      continue;
+    }
+    const target = clean(base);
+    const candidates = available
+      .filter((s) => clean(s).startsWith(target) && clean(s).length - target.length <= 4)
+      .sort((a, b) => a.length - b.length);
+    if (candidates[0]) out[base] = candidates[0];
+  }
+  return out;
+}

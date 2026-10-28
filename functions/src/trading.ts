@@ -18,7 +18,7 @@ import {
   type Position,
   type Deal,
 } from "./metaapi";
-import { STRATEGY_META, evaluate, positionSize } from "./strategy";
+import { MAX_SPREAD_ATR_RATIO, STRATEGY_META, evaluate, positionSize, resolveSymbols } from "./strategy";
 import { expireLapsedSubscriptions } from "./payments";
 import { logError, logInfo, sanitizeText } from "./util";
 
@@ -96,7 +96,8 @@ export const tbGetTrades = onCall(readOptions, async (request) => {
     ]);
 
     const closed = deals
-      .filter((d) => d.entryType === "DEAL_ENTRY_OUT" || d.type === "DEAL_TYPE_SELL" || d.type === "DEAL_TYPE_BUY")
+      // Only deals that CLOSE a position carry the profit; entries would double-count.
+      .filter((d) => d.entryType === "DEAL_ENTRY_OUT" || d.entryType === "DEAL_ENTRY_INOUT")
       .filter((d) => d.symbol)
       .map(mapDeal)
       .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
@@ -251,7 +252,23 @@ async function runForUser(
   }
 
   const heldSymbols = new Set(ourPositions.map((p) => p.symbol));
-  const symbols = plan.symbols.slice(0, plan.maxSymbols);
+
+  // Map plan symbols (EURUSD) to this account's names (EURUSDm on Exness
+  // Standard). Cached on the connection for a day.
+  let symbolMap = conn.symbolMap as Record<string, string> | undefined;
+  const mapAge = Date.now() - (Number(conn.symbolMapAt) || 0);
+  if (!symbolMap || Object.keys(symbolMap).length === 0 || mapAge > 24 * 3600_000) {
+    const available = await client.getSymbols(accountId, region);
+    symbolMap = resolveSymbols(plan.symbols, available);
+    await connSnap.ref.set({ symbolMap, symbolMapAt: Date.now() }, { merge: true });
+  }
+  const symbols = plan.symbols
+    .slice(0, plan.maxSymbols)
+    .map((base) => symbolMap![base])
+    .filter((s): s is string => Boolean(s));
+  if (symbols.length === 0) {
+    outcome.skipped.push("no-matching-symbols");
+  }
 
   for (const symbol of symbols) {
     if (ourPositions.length + outcome.placed >= plan.maxOpenPositions) break;
@@ -265,18 +282,26 @@ async function runForUser(
         200,
         region
       );
-      if (candles.length < 80) {
+      // Oldest → newest, and drop the candle that is still forming.
+      const ordered = [...candles].sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+      const closedCandles = ordered.slice(0, -1);
+      if (closedCandles.length < 80) {
         outcome.skipped.push(`${symbol}:insufficient-data`);
         continue;
       }
 
-      const signal = evaluate(candles);
+      const signal = evaluate(closedCandles);
       if (!signal) continue;
 
       const [spec, price] = await Promise.all([
         client.getSymbolSpecification(accountId, symbol, region),
         client.getSymbolPrice(accountId, symbol, region),
       ]);
+
+      if (price.ask - price.bid > signal.atr * MAX_SPREAD_ATR_RATIO) {
+        outcome.skipped.push(`${symbol}:spread-too-wide`);
+        continue;
+      }
 
       const entry = signal.direction === "BUY" ? price.ask : price.bid;
       const stopDistance = signal.atr * RISK_LIMITS.defaultAtrStopMultiple;

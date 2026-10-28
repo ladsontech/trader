@@ -27,22 +27,17 @@ export interface TradeBotUser {
   createdAt?: unknown;
 }
 
-export const ADMIN_PHONE_DIGITS = ['0753894149', '256753894149', '753894149'];
-export const ADMIN_PASSCODE = '0789572007';
+/**
+ * Only decides whether to SHOW the Admin link. The admin data itself comes
+ * from the tbAdminData Cloud Function, which checks the caller's verified
+ * sign-in on the server — there is no password in this code any more.
+ */
+export const ADMIN_PHONE_DIGITS = ['0753894149'];
 
-export function isTradeBotAdmin(
-  phoneDigits?: string | null,
-  email?: string | null,
-  isAdminFlag?: boolean
-): boolean {
-  if (isAdminFlag === true) return true;
-  const digits = (phoneDigits || email?.split('@')[0] || '').replace(/\D/g, '');
-  return (
-    digits.endsWith('753894149') ||
-    digits === '0753894149' ||
-    digits === '256753894149' ||
-    ADMIN_PHONE_DIGITS.includes(digits)
-  );
+export function isTradeBotAdmin(email?: string | null): boolean {
+  const digits = (email?.split('@')[0] || '').replace(/\D/g, '');
+  const local = digits.startsWith('256') && digits.length === 12 ? `0${digits.slice(3)}` : digits;
+  return ADMIN_PHONE_DIGITS.includes(local);
 }
 
 interface AuthContextValue {
@@ -54,9 +49,6 @@ interface AuthContextValue {
   isBrokerConnected: boolean;
   hasSeenOnboarding: boolean;
   isAdmin: boolean;
-  adminUnlocked: boolean;
-  unlockAdmin: (passcode: string) => boolean;
-  lockAdmin: () => void;
   country: 'UG' | 'KE';
   currency: 'UGX' | 'KES';
   setCountry: (country: 'UG' | 'KE') => void;
@@ -74,9 +66,6 @@ const AuthContext = createContext<AuthContextValue>({
   isBrokerConnected: false,
   hasSeenOnboarding: false,
   isAdmin: false,
-  adminUnlocked: false,
-  unlockAdmin: () => false,
-  lockAdmin: () => {},
   country: 'UG',
   currency: 'UGX',
   setCountry: () => {},
@@ -106,32 +95,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState<'UG' | 'KE'>('UG');
+  const [countryOverride, setCountryOverride] = useState<'UG' | 'KE' | null>(null);
   const userRef = useRef<User | null>(null);
   userRef.current = user;
 
-  const country: 'UG' | 'KE' = userData?.country || selectedCountry;
-  const currency: 'UGX' | 'KES' = userData?.currency || (country === 'KE' ? 'KES' : 'UGX');
+  const country: 'UG' | 'KE' = countryOverride || userData?.country || selectedCountry;
+  const currency: 'UGX' | 'KES' = country === 'KE' ? 'KES' : 'UGX';
 
+  // Country is a display preference until payment; the server records the
+  // real one when a subscription is activated.
   const setCountry = (c: 'UG' | 'KE') => {
     setSelectedCountry(c);
-    if (user) {
-      updateDoc(doc(db, 'tradebot_users', user.uid), {
-        country: c,
-        currency: c === 'KE' ? 'KES' : 'UGX',
-      }).catch((e) => console.warn('Could not update country preference:', e));
-    }
+    setCountryOverride(c);
   };
 
-  const setCurrency = (curr: 'UGX' | 'KES') => {
-    const newCountry: 'UG' | 'KE' = curr === 'KES' ? 'KE' : 'UG';
-    setSelectedCountry(newCountry);
-    if (user) {
-      updateDoc(doc(db, 'tradebot_users', user.uid), {
-        country: newCountry,
-        currency: curr,
-      }).catch((e) => console.warn('Could not update currency preference:', e));
-    }
-  };
+  const setCurrency = (curr: 'UGX' | 'KES') => setCountry(curr === 'KES' ? 'KE' : 'UG');
 
   const refreshUserData = async (currentUser?: User) => {
     const target = currentUser ?? userRef.current;
@@ -144,11 +122,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (snap.exists()) {
         const data = snap.data() as TradeBotUser;
-        const adminCheck = isTradeBotAdmin(data.phoneDigits, target.email, data.isAdmin);
-        if (adminCheck && data.isAdmin !== true) {
-          data.isAdmin = true;
-          setDoc(ref, { isAdmin: true }, { merge: true }).catch(() => {});
-        }
         setUserData(data);
         if (data.country) setSelectedCountry(data.country);
         setProfileLoaded(true);
@@ -159,7 +132,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const isKe = emailPrefix.startsWith('254') || emailPrefix.startsWith('+254');
       const detectedCountry: 'UG' | 'KE' = isKe ? 'KE' : 'UG';
       const phoneDigits = normalizePhone(emailPrefix, detectedCountry);
-      const adminCheck = isTradeBotAdmin(phoneDigits, target.email);
 
       const seed: TradeBotUser = {
         phoneDigits,
@@ -168,7 +140,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         subscriptionStatus: 'none',
         brokerConnected: false,
         botEnabled: false,
-        isAdmin: adminCheck,
         createdAt: new Date(),
       };
 
@@ -182,9 +153,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const retry = await getDoc(ref);
         if (retry.exists()) {
           const retriedData = retry.data() as TradeBotUser;
-          if (adminCheck && retriedData.isAdmin !== true) {
-            retriedData.isAdmin = true;
-          }
           setUserData(retriedData);
           if (retriedData.country) setSelectedCountry(retriedData.country);
           setProfileLoaded(true);
@@ -230,10 +198,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (snap) => {
         if (!snap.exists()) return;
         const fresh = snap.data() as TradeBotUser;
-        const adminCheck = isTradeBotAdmin(fresh.phoneDigits, user.email, fresh.isAdmin);
-        if (adminCheck && fresh.isAdmin !== true) {
-          fresh.isAdmin = true;
-        }
         setUserData(fresh);
         if (fresh.country) setSelectedCountry(fresh.country);
         setProfileLoaded(true);
@@ -245,41 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [user]);
 
-  const [adminUnlocked, setAdminUnlocked] = useState<boolean>(() => {
-    try {
-      return (
-        sessionStorage.getItem('tradebot_admin_unlocked') === 'true' ||
-        localStorage.getItem('tradebot_admin_unlocked') === 'true'
-      );
-    } catch {
-      return false;
-    }
-  });
-
-  const unlockAdmin = (passcode: string): boolean => {
-    if (passcode.trim() === ADMIN_PASSCODE) {
-      setAdminUnlocked(true);
-      try {
-        sessionStorage.setItem('tradebot_admin_unlocked', 'true');
-        localStorage.setItem('tradebot_admin_unlocked', 'true');
-      } catch {}
-      return true;
-    }
-    return false;
-  };
-
-  const lockAdmin = () => {
-    setAdminUnlocked(false);
-    try {
-      sessionStorage.removeItem('tradebot_admin_unlocked');
-      localStorage.removeItem('tradebot_admin_unlocked');
-    } catch {}
-  };
-
-  const isAdmin = useMemo(() => {
-    if (adminUnlocked) return true;
-    return isTradeBotAdmin(userData?.phoneDigits, user?.email, userData?.isAdmin);
-  }, [adminUnlocked, userData?.phoneDigits, userData?.isAdmin, user?.email]);
+  const isAdmin = useMemo(() => isTradeBotAdmin(user?.email), [user?.email]);
 
   const isSubscribed = useMemo(() => {
     if (!userData) return false;
@@ -303,9 +233,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isBrokerConnected,
       hasSeenOnboarding,
       isAdmin,
-      adminUnlocked,
-      unlockAdmin,
-      lockAdmin,
       country,
       currency,
       setCountry,
@@ -322,7 +249,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isBrokerConnected,
       hasSeenOnboarding,
       isAdmin,
-      adminUnlocked,
       country,
       currency,
     ]

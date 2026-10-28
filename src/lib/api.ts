@@ -10,8 +10,12 @@ import { app } from './firebase';
 
 const functions = getFunctions(app);
 
-async function call<TReq extends object, TRes>(name: string, payload?: TReq): Promise<TRes> {
-  const fn = httpsCallable<TReq, TRes>(functions, name);
+async function call<TReq extends object, TRes>(
+  name: string,
+  payload?: TReq,
+  timeoutMs?: number
+): Promise<TRes> {
+  const fn = httpsCallable<TReq, TRes>(functions, name, timeoutMs ? { timeout: timeoutMs } : undefined);
   const result = (await fn(payload ?? ({} as TReq))) as HttpsCallableResult<TRes>;
   return result.data;
 }
@@ -104,7 +108,9 @@ export function connectBroker(input: {
   password: string;
   server: string;
 }) {
-  return call<typeof input, ConnectBrokerResult>('tbConnectBroker', input);
+  // Connecting can take a few minutes while the broker accepts the login; the
+  // SDK's default 70 s timeout would report a failure that is not one.
+  return call<typeof input, ConnectBrokerResult>('tbConnectBroker', input, 9 * 60 * 1000);
 }
 
 export function disconnectBroker() {
@@ -197,5 +203,46 @@ export function setBotEnabled(enabled: boolean) {
   return call<{ enabled: boolean }, { success: boolean; botEnabled: boolean }>(
     'tbSetBotEnabled',
     { enabled }
+  );
+}
+
+/* ── Admin ────────────────────────────────────────────────────── */
+
+export interface AdminUser {
+  id: string;
+  phoneDigits: string | null;
+  country: 'UG' | 'KE' | null;
+  currency: 'UGX' | 'KES' | null;
+  subscriptionPlan: 'standard' | 'premium' | null;
+  subscriptionStatus: 'active' | 'expired' | 'none';
+  subscriptionExpiresAt: number | null;
+  subscriptionActivatedAt: number | null;
+  broker: string | null;
+  brokerConnected: boolean;
+  brokerAccountId: string | null;
+  brokerServer: string | null;
+  botEnabled: boolean;
+  createdAt: number | null;
+}
+
+export interface AdminTransaction {
+  id: string;
+  reference: string;
+  userId: string | null;
+  phoneNumber: string | null;
+  amount: number;
+  currency: string;
+  planId: string | null;
+  status: 'completed' | 'pending' | 'failed';
+  provider: string;
+  createdAt: number | null;
+  completedAt: number | null;
+  failureReason: string | null;
+}
+
+/** Server checks that the caller is an admin; the browser cannot fake it. */
+export function adminData() {
+  return call<Record<string, never>, { users: AdminUser[]; transactions: AdminTransaction[] }>(
+    'tbAdminData'
   );
 }

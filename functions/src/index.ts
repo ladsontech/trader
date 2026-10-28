@@ -29,3 +29,5 @@ export {
   tbBotTick,
   tbDailyMaintenance,
 } from "./trading";
+
+export { tbAdminData } from "./admin";

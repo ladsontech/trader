@@ -13,6 +13,7 @@ export default defineConfig({
       { find: /^.*\/lib\/auth-context$/, replacement: path.join(here, 'preview/mock-auth.tsx') },
       { find: /^.*\/lib\/api$/, replacement: path.join(here, 'preview/mock-api.ts') },
       { find: /^.*\/lib\/firebase$/, replacement: path.join(here, 'preview/mock-firebase.ts') },
+      { find: /^firebase\/firestore$/, replacement: path.join(here, 'preview/mock-firestore.ts') },
     ],
   },
   server: { port: 4321, host: '127.0.0.1' },

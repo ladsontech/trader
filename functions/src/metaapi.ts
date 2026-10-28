@@ -175,6 +175,13 @@ export class MetaApiClient {
     url: string,
     init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}
   ): Promise<T> {
+    return (await this.requestWithStatus<T>(url, init)).data;
+  }
+
+  private async requestWithStatus<T>(
+    url: string,
+    init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}
+  ): Promise<{ status: number; data: T }> {
     const headers: Record<string, string> = {
       "auth-token": this.token,
       Accept: "application/json",
@@ -221,7 +228,7 @@ export class MetaApiClient {
       throw new MetaApiError(message, response.status, parsed);
     }
 
-    return parsed as T;
+    return { status: response.status, data: parsed as T };
   }
 
   /* ── Provisioning ──────────────────────────────────────────── */
@@ -242,25 +249,48 @@ export class MetaApiClient {
     region?: string;
   }): Promise<{ id: string; state: AccountState }> {
     const transactionId = randomTransactionId();
-    const result = await this.request<{ id: string; state: AccountState }>(
-      `${PROVISIONING_HOST}/users/current/accounts`,
-      {
-        method: "POST",
-        headers: { "transaction-id": transactionId },
-        body: {
-          name: params.name,
-          type: "cloud-g2",
-          login: params.login,
-          password: params.password,
-          server: params.server,
-          platform: params.platform,
-          magic: params.magic,
-          keywords: params.keywords,
-          region: params.region || DEFAULT_REGION,
-        },
+    const body = {
+      name: params.name,
+      type: "cloud-g2",
+      login: params.login,
+      password: params.password,
+      server: params.server,
+      platform: params.platform,
+      magic: params.magic,
+      keywords: params.keywords,
+      region: params.region || DEFAULT_REGION,
+    };
+    /*
+      MetaApi answers 202 while it looks up a broker server it has not seen
+      before, and wants the SAME request repeated with the same transaction-id
+      until it answers 201. Without this loop a new server name fails with an
+      empty account id.
+    */
+    const deadline = Date.now() + 150_000;
+    while (true) {
+      const { status, data } = await this.requestWithStatus<{ id?: string; state?: AccountState }>(
+        `${PROVISIONING_HOST}/users/current/accounts`,
+        { method: "POST", headers: { "transaction-id": transactionId }, body }
+      );
+      if (status !== 202 && data?.id) {
+        return { id: data.id, state: (data.state || "CREATED") as AccountState };
       }
+      if (Date.now() > deadline) {
+        throw new MetaApiError(
+          "Your broker's server is taking too long to respond. Please try again in a few minutes.",
+          408,
+          data
+        );
+      }
+      await sleep(10_000);
+    }
+  }
+
+  /** All symbol names on the account, e.g. "EURUSDm" on Exness Standard. */
+  async getSymbols(accountId: string, region = DEFAULT_REGION): Promise<string[]> {
+    return this.request<string[]>(
+      `${clientHost(region)}/users/current/accounts/${accountId}/symbols`
     );
-    return result;
   }
 
   async getAccount(accountId: string): Promise<TradingAccount> {

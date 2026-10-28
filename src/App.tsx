@@ -3,7 +3,6 @@ import type React from 'react';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import AppLayout from './components/layout/AppLayout';
 import AuthPage from './pages/AuthPage';
-import Onboarding from './pages/Onboarding';
 import Subscribe from './pages/Subscribe';
 import ConnectBroker from './pages/ConnectBroker';
 import Dashboard from './pages/Dashboard';
@@ -23,11 +22,10 @@ function Booting() {
 /**
  * The paywall.
  *
- * Signed out            → /auth
- * Signed in, no cards   → /welcome
- * Signed in, unpaid     → /subscribe
- * Paid, no broker       → /broker
- * Everything else       → the app
+ * Signed out            → /auth        (step 1: create account)
+ * Signed in, unpaid     → /subscribe   (step 2: choose a plan and pay)
+ * Paid, no broker       → /broker      (step 3: connect broker)
+ * Everything else       → the app      (step 4: trade)
  *
  * This is routing convenience, not the security boundary. The real
  * enforcement is server-side: the Cloud Functions refuse to connect a
@@ -41,7 +39,6 @@ function Gate({ children }: { children: React.ReactNode }) {
     profileLoaded,
     isSubscribed,
     isBrokerConnected,
-    hasSeenOnboarding,
     isAdmin,
   } = useAuth();
   const location = useLocation();
@@ -59,20 +56,18 @@ function Gate({ children }: { children: React.ReactNode }) {
 
   const path = location.pathname;
 
-  if (!hasSeenOnboarding && path !== '/welcome') {
-    return <Navigate to="/welcome" replace />;
-  }
-
-  // Settings and Admin portals are always reachable directly
-  if (path === '/settings' || path === '/trade-admin' || path === '/admin') {
+  // Settings is always reachable (sign out, etc.)
+  if (path === '/settings') {
     return <>{children}</>;
   }
 
-  if (hasSeenOnboarding && !isSubscribed && path !== '/subscribe') {
+  if (!isSubscribed && path !== '/subscribe') {
     return <Navigate to="/subscribe" replace />;
   }
 
-  if (isSubscribed && !isBrokerConnected && path !== '/broker') {
+  // /subscribe stays open so a fresh payer sees "Payment received" before
+  // moving on (and so subscribers can renew).
+  if (isSubscribed && !isBrokerConnected && path !== '/broker' && path !== '/subscribe') {
     return <Navigate to="/broker" replace />;
   }
 
@@ -88,15 +83,9 @@ function AppRoutes() {
     <Routes>
       <Route path="/auth" element={user ? <Navigate to="/" replace /> : <AuthPage />} />
 
-      {/* Full-bleed screens: no app chrome until the user is inside. */}
-      <Route
-        path="/welcome"
-        element={
-          <Gate>
-            <Onboarding />
-          </Gate>
-        }
-      />
+      {/* Old links */}
+      <Route path="/welcome" element={<Navigate to="/" replace />} />
+      <Route path="/trade-admin" element={<Navigate to="/admin" replace />} />
 
       <Route
         element={
@@ -111,7 +100,6 @@ function AppRoutes() {
         <Route path="/trades" element={<Trades />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<Admin />} />
-        <Route path="/trade-admin" element={<Admin />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

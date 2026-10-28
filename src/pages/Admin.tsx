@@ -1,16 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { useAuth } from '../lib/auth-context';
-import { Button, Card, Field, Notice, SectionTitle, StatusDot, cx } from '../components/ui';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { adminData, apiErrorMessage } from '../lib/api';
+import { Card, Notice, SectionTitle, StatusDot, cx } from '../components/ui';
 import {
   Bot,
   CheckCircle2,
   Clock,
   CreditCard,
-  Eye,
-  EyeOff,
-  KeyRound,
   Lock,
   RefreshCw,
   Search,
@@ -58,11 +53,8 @@ interface TransactionRecord {
 }
 
 export default function Admin() {
-  const { isAdmin, adminUnlocked, unlockAdmin, lockAdmin } = useAuth();
-  const [passcode, setPasscode] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [submittingAuth, setSubmittingAuth] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [forbidden, setForbidden] = useState(false);
 
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
@@ -81,70 +73,29 @@ export default function Admin() {
   const [txStatusFilter, setTxStatusFilter] = useState<'ALL' | 'completed' | 'pending' | 'failed'>('ALL');
   const [txCurrencyFilter, setTxCurrencyFilter] = useState<'ALL' | 'UGX' | 'KES'>('ALL');
 
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setSubmittingAuth(true);
-
-    const success = unlockAdmin(passcode);
-    if (!success) {
-      setAuthError('Incorrect admin passcode. Please enter the valid administrator password.');
-      setSubmittingAuth(false);
-      return;
+  // Admin rights are checked by the tbAdminData Cloud Function, not here.
+  const load = useCallback(async () => {
+    setLoadingUsers(true);
+    setLoadingTx(true);
+    setLoadError('');
+    try {
+      const data = await adminData();
+      setUsers(data.users as unknown as UserRecord[]);
+      setTransactions(data.transactions as unknown as TransactionRecord[]);
+      setForbidden(false);
+    } catch (err) {
+      const code = ((err as { code?: string })?.code || '').replace(/^functions\//, '');
+      if (code === 'permission-denied') setForbidden(true);
+      else setLoadError(apiErrorMessage(err, 'Could not load admin data.'));
+    } finally {
+      setLoadingUsers(false);
+      setLoadingTx(false);
     }
+  }, []);
 
-    setSubmittingAuth(false);
-  };
-
-  // Real-time listener for users
   useEffect(() => {
-    if (!isAdmin && !adminUnlocked) return;
-
-    const unsub = onSnapshot(
-      collection(db, 'tradebot_users'),
-      (snap) => {
-        const list: UserRecord[] = snap.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        setUsers(list);
-        setLoadingUsers(false);
-      },
-      (err) => {
-        console.error('Error fetching tradebot users:', err);
-        setLoadingUsers(false);
-      }
-    );
-    return () => unsub();
-  }, [isAdmin, adminUnlocked]);
-
-  // Real-time listener for transactions
-  useEffect(() => {
-    if (!isAdmin && !adminUnlocked) return;
-
-    const unsub = onSnapshot(
-      collection(db, 'tradebot_transactions'),
-      (snap) => {
-        const list: TransactionRecord[] = snap.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        }));
-        // Sort newest first
-        list.sort((a, b) => {
-          const timeA = toMillis(a.createdAt);
-          const timeB = toMillis(b.createdAt);
-          return timeB - timeA;
-        });
-        setTransactions(list);
-        setLoadingTx(false);
-      },
-      (err) => {
-        console.error('Error fetching tradebot transactions:', err);
-        setLoadingTx(false);
-      }
-    );
-    return () => unsub();
-  }, [isAdmin, adminUnlocked]);
+    load();
+  }, [load]);
 
   const toMillis = (timestamp: any): number => {
     if (!timestamp) return 0;
@@ -280,64 +231,18 @@ export default function Admin() {
 
   const isLoading = loadingUsers || loadingTx;
 
-  // ── Passcode Gate ──────────────────────────────────────────────────
-  if (!isAdmin && !adminUnlocked) {
+  // ── Not an admin ───────────────────────────────────────────────────
+  if (forbidden) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-6 sm:p-8 space-y-6">
-          <div className="text-center space-y-2">
-            <div className="h-12 w-12 rounded-2xl bg-accent-soft border border-accent/30 flex items-center justify-center mx-auto text-accent shadow-lg shadow-accent/10">
-              <KeyRound className="h-6 w-6" />
-            </div>
-            <h1 className="text-xl font-bold text-ink tracking-tight">
-              TradeBot Master Admin
-            </h1>
-            <p className="text-xs text-ink-soft max-w-xs mx-auto">
-              Enter administrator password to access live deposit metrics and user sign-ups.
-            </p>
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
+        <Card className="w-full max-w-md p-6 text-center space-y-2">
+          <div className="h-12 w-12 rounded-2xl bg-surface-2 border border-line flex items-center justify-center mx-auto text-ink-soft">
+            <Lock className="h-6 w-6" />
           </div>
-
-          {authError && <Notice tone="error">{authError}</Notice>}
-
-          <form onSubmit={handleAdminLogin} className="space-y-4">
-            <Field label="Admin Password / Passcode">
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
-                  placeholder="Enter admin password…"
-                  autoFocus
-                  required
-                  className="input pr-10 text-sm font-mono tracking-wider h-11"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink transition cursor-pointer"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </Field>
-
-            <Button
-              type="submit"
-              variant="primary"
-              block
-              loading={submittingAuth}
-              className="h-11 font-semibold text-sm"
-            >
-              Sign In to Admin Portal
-            </Button>
-          </form>
-
-          <div className="pt-2 border-t border-line text-center">
-            <p className="text-[11px] text-ink-faint">
-              Protected Administrator Portal · Path: <code className="text-accent">/trade-admin</code>
-            </p>
-          </div>
+          <h1 className="text-lg font-bold text-ink">Admins only</h1>
+          <p className="text-xs text-ink-soft">
+            Sign in with an administrator phone number to see this page.
+          </p>
         </Card>
       </div>
     );
@@ -364,24 +269,17 @@ export default function Admin() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => load()}
             className="btn btn-ghost text-xs flex items-center gap-1.5 h-8.5 px-3"
             title="Refresh Data"
           >
             <RefreshCw className={cx('h-3.5 w-3.5', isLoading && 'animate-spin')} />
             <span>Sync</span>
           </button>
-
-          <button
-            onClick={lockAdmin}
-            className="btn btn-ghost text-xs flex items-center gap-1.5 h-8.5 px-3 text-rose-400 hover:text-rose-300"
-            title="Lock Admin Session"
-          >
-            <Lock className="h-3.5 w-3.5" />
-            <span>Lock</span>
-          </button>
         </div>
       </div>
+
+      {loadError && <Notice tone="error">{loadError}</Notice>}
 
       {/* Primary KPI Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

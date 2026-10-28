@@ -8,6 +8,37 @@ functions are deployed as a **separate Firebase codebase** (`tradebot`).
 
 ---
 
+## 0. October 2026 fixes (deploy these)
+
+Found while testing the live site. **Deploy the functions and the rules below.**
+
+| Problem | Fix |
+| --- | --- |
+| **Free plans.** `tbMarzPayWebhook` believed any POST that said "completed". Anyone could take their own payment reference and fake that callback. | The webhook and `tbCheckPayment` now ask Marz Pay for the real status (`GET /collect-money/{uuid}`) before activating anything. A signed callback is also accepted when `MARZPAY_WEBHOOK_SECRET` is set. |
+| **Poll could activate unpaid plans.** It read Marz Pay's top-level `"status": "success"` (meaning "the API call worked") as "paid". | It now reads `data.transaction.status` only. |
+| **Admin password in the website code.** The `/trade-admin` passcode was in the JavaScript bundle and in a git commit message. | It's removed. `/admin` gets its data from the new `tbAdminData` function, which checks the signed-in phone number on the server (`TRADEBOT_ADMIN_PHONES`). **Do not reuse the old password anywhere.** |
+| **Bot never traded on Exness Standard accounts**, where symbols are `EURUSDm`, not `EURUSD`. | Plan symbols are now matched against the account's real symbol list. |
+| **Spread filter blocked every trade.** It compared candle spread (in points) with ATR (in price). | The bot now checks the live bid/ask spread instead. |
+| The bot read the still-forming candle. | It uses closed candles only. |
+| New broker servers failed to connect. MetaApi returns 202 while it looks the server up. | The bot now retries with the same transaction-id. |
+| Connecting a broker showed an error after 70 s while the connection was still in progress. | The client timeout is now 9 minutes and the function timeout 540 s. |
+| Trade stats counted entry deals as closed trades. | Only closing deals are counted. |
+| Profiles could be created with `isAdmin` or other extra fields. | The rule now lists exactly which fields a new profile may have (see `firestore.rules.tradebot.txt`). |
+| UI | The onboarding cards are gone, so the flow is now **sign up → plan → broker → trade**. A step indicator shows where you are, and the menu is hidden until setup is done. |
+
+Deploy:
+
+```bash
+cd functions && npm install && npm test && cd ..
+firebase deploy --only functions:tradebot
+# then paste the updated tradebot_users block from firestore.rules.tradebot.txt
+# into investio/firestore.rules and, from the investio folder:
+firebase deploy --only firestore:rules
+npm run build && vercel --prod
+```
+
+---
+
 ## 1. What changed and why
 
 ### The payment bug that was fixed

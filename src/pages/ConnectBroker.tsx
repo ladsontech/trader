@@ -260,7 +260,7 @@ export default function ConnectBroker() {
 
           {connecting && (
             <p className="text-[12px] text-ink-faint text-center leading-relaxed">
-              This takes up to a minute — we start a terminal and wait for {broker.name} to
+              This usually takes 1–3 minutes. Keep this page open while we wait for {broker.name} to
               accept the login before saving anything.
             </p>
           )}

@@ -126,7 +126,7 @@ export default function AuthPage() {
           </h1>
           <p className="text-[13px] text-ink-soft mt-1 mb-5">
             {isSignup
-              ? 'Select your country and enter your phone number to get started.'
+              ? 'Step 1 of 4. Next you choose a plan, connect your broker and start trading.'
               : 'Sign in with the number and country you registered.'}
           </p>
 

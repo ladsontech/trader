@@ -40,7 +40,6 @@ export const PLANS: Plan[] = [
       '0.5% equity risk per trade',
       'Up to 3 positions at once',
       'Stop loss and take profit on every order',
-      'Full trade history from your broker',
     ],
   },
   {
@@ -59,7 +58,6 @@ export const PLANS: Plan[] = [
       '8 instruments including gold (XAU/USD)',
       '1% equity risk per trade',
       'Up to 6 positions at once',
-      'Priority execution slot each cycle',
       'Everything in Standard',
     ],
   },

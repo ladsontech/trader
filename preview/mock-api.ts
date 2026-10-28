@@ -1,8 +1,27 @@
-export function apiErrorMessage(_e: unknown, f: string) { return f; }
-export const initiateSubscription = async () => ({ success: true, reused: false, reference: 'r', planId: 'premium', amount: 100000 });
-export const checkPayment = async () => ({ status: 'pending' as const, failureReason: null });
+import { updateMockState } from './mock-auth';
+export function apiErrorMessage(e: unknown, f: string) { return (e as Error)?.message || f; }
+const flow = new URLSearchParams(location.search).get('screen') === 'flow';
+let paid = false;
+export const initiateSubscription = async (planId = 'premium') => {
+  (window as any).__calls = [...((window as any).__calls || []), ['initiateSubscription', planId]];
+  return { success: true, reused: false, reference: 'r', planId, amount: 100000 };
+};
+export const checkPayment = async () => {
+  if (!flow) return { status: 'pending' as const, failureReason: null };
+  // Second poll: Marz Pay confirmed → the server activates the plan.
+  if (paid) {
+    updateMockState({ isSubscribed: true, userData: { subscriptionStatus: 'active', subscriptionPlan: 'premium' } });
+    return { status: 'completed' as const, failureReason: null };
+  }
+  paid = true;
+  return { status: 'pending' as const, failureReason: null };
+};
 export const cancelPayment = async () => ({ success: true });
-export const connectBroker = async () => ({} as never);
+export const connectBroker = async (input: { password: string }) => {
+  if (input.password === 'wrong') throw new Error('The broker rejected these credentials. Check the account number, password and server name.');
+  updateMockState({ isBrokerConnected: true, userData: { brokerConnected: true, broker: 'Exness', botEnabled: true } });
+  return { success: true, broker: 'Exness', currency: 'USD', balance: 1840.55, equity: 1840.55, leverage: 500, server: 'Exness-MT5Trial9', accountMasked: '128••04' };
+};
 export const disconnectBroker = async () => ({ success: true });
 export const setBotEnabled = async () => ({ success: true, botEnabled: true });
 export const closePosition = async () => ({ success: true, message: 'ok' });
@@ -24,3 +43,4 @@ export const getTrades = async () => ({
   ],
   stats: { openCount: 3, closedCount: 26, floatingPnl: 52.65, realizedPnl: 218.43, winRate: 61.5, wins: 16, losses: 10 },
 });
+export const adminData = async () => ({ users: [], transactions: [] });
