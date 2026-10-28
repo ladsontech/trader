@@ -4,10 +4,10 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../lib/auth-context';
 import { PLANS, getPlanPrice, planById } from '../lib/constants';
-import { checkPayment, initiateSubscription, apiErrorMessage } from '../lib/api';
+import { checkPayment, initiateSubscription, cancelPayment, apiErrorMessage } from '../lib/api';
 import { formatLocalMoney, remainingLabel, renewalDate } from '../lib/format';
 import { Button, Card, Field, Notice, cx } from '../components/ui';
-import { ArrowRight, Check, CheckCircle2, Crown, Smartphone, Sparkles, XCircle, Zap } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Crown, Loader2, Smartphone, Sparkles, XCircle, Zap } from 'lucide-react';
 
 type TxState = 'idle' | 'waiting' | 'completed' | 'failed';
 
@@ -22,6 +22,7 @@ export default function Subscribe() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const submittingRef = useRef(false);
 
   const plan = PLANS.find((p) => p.id === selected)!;
@@ -34,10 +35,11 @@ export default function Subscribe() {
     const saved = localStorage.getItem(pendingKey(user.uid));
     if (!saved) return;
     try {
-      const parsed = JSON.parse(saved) as { reference?: string; planId?: 'standard' | 'premium' };
+      const parsed = JSON.parse(saved) as { reference?: string; planId?: 'standard' | 'premium'; phone?: string };
       if (!parsed.reference) throw new Error('empty');
       setReference(parsed.reference);
       if (parsed.planId) setSelected(parsed.planId);
+      if (parsed.phone) setPhone(parsed.phone);
       setState('waiting');
     } catch {
       localStorage.removeItem(pendingKey(user.uid));
@@ -110,7 +112,7 @@ export default function Subscribe() {
       if (user) {
         localStorage.setItem(
           pendingKey(user.uid),
-          JSON.stringify({ reference: result.reference, planId: plan.id })
+          JSON.stringify({ reference: result.reference, planId: plan.id, phone: digits })
         );
       }
       setReference(result.reference);
@@ -127,6 +129,23 @@ export default function Subscribe() {
     }
   };
 
+  const cancelWait = async () => {
+    setCancelling(true);
+    const ref = reference;
+    if (user) localStorage.removeItem(pendingKey(user.uid));
+    setReference(null);
+    setState('idle');
+    setNotice('Payment cancelled');
+    setError('');
+    try {
+      if (ref) await cancelPayment(ref);
+    } catch (err) {
+      console.warn('Failed to notify server of cancellation:', err);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const reset = () => {
     if (user) localStorage.removeItem(pendingKey(user.uid));
     setState('idle');
@@ -134,6 +153,60 @@ export default function Subscribe() {
     setError('');
     setNotice('');
   };
+
+  /* ── Waiting for PIN ────────────────────────────────────────── */
+  if (state === 'waiting') {
+    const formattedAmount = formatLocalMoney(planPrice, currency);
+    const trimmedPhone = phone.trim();
+    const displayPhone = trimmedPhone.startsWith('0') || trimmedPhone.startsWith('+')
+      ? trimmedPhone
+      : `0${trimmedPhone}`;
+
+    return (
+      <div className="max-w-md mx-auto fade-up">
+        <Card className="p-6 sm:p-7 text-center border-accent/30 shadow-lg shadow-accent/5">
+          <div className="w-12 h-12 rounded-full bg-accent-soft text-accent flex items-center justify-center mx-auto mb-4">
+            <Loader2 className="w-6 h-6 animate-spin text-accent" />
+          </div>
+
+          <h2 className="text-[18px] font-bold text-ink">Waiting for your PIN</h2>
+
+          <div className="mt-3.5 p-3.5 rounded-xl bg-surface-2 border border-line">
+            <p className="text-[14px] font-semibold text-accent tnum">
+              {formattedAmount} to {displayPhone}
+            </p>
+            <p className="text-[12px] text-ink-soft mt-1 leading-snug">
+              {isKenya
+                ? 'Approve the Safaricom M-Pesa prompt on your phone.'
+                : 'Approve the prompt with your Mobile Money PIN on your phone.'}
+            </p>
+          </div>
+
+          <p className="text-[12.5px] text-ink-soft mt-4 leading-relaxed">
+            This page updates by itself once your payment is received.
+          </p>
+
+          <p className="text-[11.5px] text-ink-faint mt-2.5 leading-relaxed bg-surface/60 p-2.5 rounded-lg border border-line/60">
+            To stop this payment, tap Cancel payment below and simply close the prompt on your phone without entering your PIN.
+          </p>
+
+          <div className="mt-5">
+            <Button
+              type="button"
+              variant="ghost"
+              block
+              onClick={cancelWait}
+              loading={cancelling}
+              className="border border-line hover:border-line-strong cursor-pointer"
+            >
+              <XCircle className="w-4 h-4 mr-1.5" />
+              Cancel payment
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   /* ── Already subscribed ─────────────────────────────────────── */
   if (isSubscribed && state !== 'completed') {
@@ -194,6 +267,11 @@ export default function Subscribe() {
               disabled={false}
             />
           </div>
+          {notice && (
+            <div className="mt-3">
+              <Notice tone="info">{notice}</Notice>
+            </div>
+          )}
           {error && (
             <div className="mt-3">
               <Notice tone="error">{error}</Notice>
@@ -276,19 +354,11 @@ export default function Subscribe() {
         selected={selected}
         onSelect={setSelected}
         currency={currency}
-        locked={state === 'waiting'}
+        locked={false}
       />
 
       {/* Payment area */}
       <div className="mt-6 space-y-3">
-        {state === 'waiting' && (
-          <Notice tone="warn" title="Check your phone">
-            {isKenya
-              ? `Approve the ${formatLocalMoney(planPrice, currency)} M-Pesa STK prompt on your Safaricom handset. This page updates itself the moment it clears.`
-              : `Approve the ${formatLocalMoney(planPrice, currency)} request with your Mobile Money PIN. This page updates itself the moment it clears.`}
-          </Notice>
-        )}
-
         {notice && <Notice tone="info">{notice}</Notice>}
 
         {state === 'failed' && error && (
@@ -311,7 +381,7 @@ export default function Subscribe() {
             country={country}
             onSubmit={pay}
             submitting={submitting}
-            disabled={state === 'waiting'}
+            disabled={false}
           />
         )}
       </div>

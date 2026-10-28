@@ -16,7 +16,10 @@ export const checkPayment = async () => {
   paid = true;
   return { status: 'pending' as const, failureReason: null };
 };
-export const cancelPayment = async () => ({ success: true });
+export const cancelPayment = async () => {
+  paid = false;
+  return { success: true };
+};
 export const connectBroker = async (input: { password: string }) => {
   if (input.password === 'wrong') throw new Error('The broker rejected these credentials. Check the account number, password and server name.');
   updateMockState({ isBrokerConnected: true, userData: { brokerConnected: true, broker: 'Exness', botEnabled: true } });

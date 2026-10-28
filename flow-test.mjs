@@ -35,12 +35,20 @@ try {
   await page.getByRole('button', { name: /Standard/ }).first().click();
   await page.getByText('UGX 50,000').last().waitFor();
   await page.getByRole('button', { name: 'Send payment request' }).click();
-  await page.getByText('Check your phone').waitFor();
+  await page.getByText('Waiting for your PIN').waitFor();
   await page.screenshot({ path: 'shots/flow-1-waiting.png', fullPage: true });
-  step('Send payment request → "Check your phone"');
+  step('Send payment request → "Waiting for your PIN"');
   const calls = await page.evaluate(() => window.__calls);
   if (calls[0][1] !== 'standard') throw new Error('wrong plan sent: ' + calls[0][1]);
   step('Chosen plan (standard) sent to the server');
+
+  await page.getByRole('button', { name: 'Cancel payment' }).click();
+  await page.getByText('Payment cancelled').waitFor();
+  step('Cancel payment → back to plan screen with "Payment cancelled"');
+
+  await page.getByRole('button', { name: 'Send payment request' }).click();
+  await page.getByText('Waiting for your PIN').waitFor();
+  step('Pay again → "Waiting for your PIN"');
 
   await page.getByText('Payment received').waitFor({ timeout: 25000 });
   await page.screenshot({ path: 'shots/flow-2-paid.png', fullPage: true });
