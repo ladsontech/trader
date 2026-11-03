@@ -5,7 +5,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const dist = path.resolve('preview-dist');
+const dist = fs.existsSync(path.resolve('preview-dist')) ? path.resolve('preview-dist') : path.resolve('preview/preview-dist');
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   let file = path.join(dist, url.pathname);
