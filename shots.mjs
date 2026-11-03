@@ -16,7 +16,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(4400, r));
 
 const browser = await chromium.launch();
-const screens = ['auth', 'subscribe&setup=plan', 'broker&setup=broker', 'dashboard', 'trades', 'broker', 'subscribe', 'settings'];
+const screens = ['auth', 'subscribe&setup=plan', 'checkout&setup=plan', 'broker&setup=broker', 'dashboard', 'trades', 'broker', 'subscribe', 'settings'];
 fs.mkdirSync('shots', { recursive: true });
 
 for (const [name, size] of [['desktop', { width: 1280, height: 900 }], ['mobile', { width: 390, height: 844 }]]) {

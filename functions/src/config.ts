@@ -79,10 +79,15 @@ export const COL = {
   botRuns: "tradebot_bot_runs",
 } as const;
 
-/* ── Plans (server-side source of truth for price) ────────────── */
+/* ── Plans (server-side source of truth for price) ────────────── *
+ * Priced in USD; the local amounts are fixed conversions at about
+ * UGX 3,700 and KES 130 to the dollar. Change all three together, and
+ * mirror them in src/lib/constants.ts (display only). */
 export interface PlanDef {
   id: "standard" | "premium";
   name: string;
+  /** Headline price shown to users. UGX/KES below are what mobile money charges. */
+  priceUsd: number;
   price: number; // UGX fallback
   priceUgx: number;
   priceKes: number;
@@ -98,9 +103,10 @@ export const PLANS: Record<string, PlanDef> = {
   standard: {
     id: "standard",
     name: "Standard Bot",
-    price: 50000,
-    priceUgx: 50000,
-    priceKes: 1800,
+    priceUsd: 15,
+    price: 55500,
+    priceUgx: 55500,
+    priceKes: 1950,
     durationDays: 365,
     maxSymbols: 3,
     symbols: ["EURUSD", "GBPUSD", "USDJPY"],
@@ -110,9 +116,10 @@ export const PLANS: Record<string, PlanDef> = {
   premium: {
     id: "premium",
     name: "VIP Premium Bot",
-    price: 100000,
-    priceUgx: 100000,
-    priceKes: 3500,
+    priceUsd: 30,
+    price: 111000,
+    priceUgx: 111000,
+    priceKes: 3900,
     durationDays: 365,
     maxSymbols: 8,
     symbols: [

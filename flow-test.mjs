@@ -26,17 +26,58 @@ let n = 0;
 const step = (s) => console.log(`${++n}. ${s}`);
 
 try {
+  // ── Sign-up form ──
+  await page.goto('http://127.0.0.1:4401/?screen=auth');
+  await page.getByText('Start auto-trading').waitFor();
+  if (!(await page.getByText('+256', { exact: true }).isVisible())) throw new Error('default code is not +256');
+  if (await page.getByRole('button', { name: /Kenya/ }).count()) throw new Error('country buttons still shown');
+  step('Sign-up opens with +256 (Uganda) as the default code, no country buttons');
+  await page.getByLabel('Country').selectOption('254');
+  await page.getByText('+254', { exact: true }).waitFor();
+  step('Country picker switches the code to +254');
+  await page.getByLabel('Country').selectOption({ label: '🌍 Other country — type code' });
+  await page.getByLabel('Country code').fill('233');
+  await page.locator('#auth-phone').fill('12');
+  await page.locator('#auth-password').fill('secret1');
+  await page.locator('#auth-submit').click();
+  await page.getByText('Enter a valid phone number.').waitFor();
+  step('Other country: code typed by hand (+233), short number rejected');
+  await page.locator('#auth-phone').fill('+254 712 345 678');
+  await page.getByText('+254', { exact: true }).waitFor();
+  if ((await page.locator('#auth-phone').inputValue()) !== '712345678') throw new Error('pasted code not split');
+  step('Pasting "+254 712…" moves the code into the picker');
+  await page.screenshot({ path: 'shots/flow-0-signup.png', fullPage: true });
+
   await page.goto('http://127.0.0.1:4401/?screen=flow');
   await page.waitForURL('**/subscribe');
   await page.getByText('Choose your plan').waitFor();
   step('Signed-in, unpaid user lands on Choose your plan (step 2), no menu');
   if (await page.getByText('Trades', { exact: true }).count()) throw new Error('nav visible during setup');
 
-  await page.getByRole('button', { name: /Standard/ }).first().click();
-  await page.getByText('UGX 50,000').last().waitFor();
-  await page.getByRole('button', { name: 'Send payment request' }).click();
+  await page.getByText('$15').waitFor();
+  await page.getByText('≈ UGX 55,500').waitFor();
+  step('Plans show USD prices with the UGX amount underneath');
+  await page.getByRole('link', { name: 'Choose Standard' }).click();
+  await page.waitForURL('**/checkout?plan=standard');
+  await page.getByRole('heading', { name: 'Checkout' }).waitFor();
+  if (!(await page.getByText('+256', { exact: true }).isVisible())) throw new Error('checkout code is not +256');
+  step('Choose Standard → separate checkout page, number pre-filled with +256');
+  await page.getByLabel('Country').selectOption({ label: '🌍 Other country — type code' });
+  await page.getByLabel('Country code').fill('255');
+  await page.locator('#checkout-phone').fill('712345678');
+  await page.locator('#checkout-pay').click();
+  await page.getByText(/Uganda \(\+256\) or Kenya \(\+254\)/).first().waitFor();
+  step('Code can be changed by hand; a non-mobile-money code is explained, not sent');
+  await page.getByLabel('Country code').fill('254');
+  await page.getByRole('button', { name: 'Pay KES 1,950' }).waitFor();
+  step('Typing +254 switches the amount to KES 1,950');
+  await page.getByRole('button', { name: 'List' }).click();
+  await page.getByLabel('Country').selectOption('256');
+  await page.locator('#checkout-phone').fill('0770123456');
+  await page.screenshot({ path: 'shots/flow-1-checkout.png', fullPage: true });
+  await page.getByRole('button', { name: 'Pay UGX 55,500' }).click();
   await page.getByText('Waiting for your PIN').waitFor();
-  await page.screenshot({ path: 'shots/flow-1-waiting.png', fullPage: true });
+  await page.screenshot({ path: 'shots/flow-2-waiting.png', fullPage: true });
   step('Send payment request → "Waiting for your PIN"');
   const calls = await page.evaluate(() => window.__calls);
   if (calls[0][1] !== 'standard') throw new Error('wrong plan sent: ' + calls[0][1]);
@@ -44,14 +85,14 @@ try {
 
   await page.getByRole('button', { name: 'Cancel payment' }).click();
   await page.getByText('Payment cancelled').waitFor();
-  step('Cancel payment → back to plan screen with "Payment cancelled"');
+  step('Cancel payment → back on checkout with "Payment cancelled"');
 
-  await page.getByRole('button', { name: 'Send payment request' }).click();
+  await page.getByRole('button', { name: 'Pay UGX 55,500' }).click();
   await page.getByText('Waiting for your PIN').waitFor();
   step('Pay again → "Waiting for your PIN"');
 
   await page.getByText('Payment received').waitFor({ timeout: 25000 });
-  await page.screenshot({ path: 'shots/flow-2-paid.png', fullPage: true });
+  await page.screenshot({ path: 'shots/flow-3-paid.png', fullPage: true });
   step('Payment confirmed by the server → "Payment received"');
 
   await page.getByRole('link', { name: 'Connect my broker' }).click();

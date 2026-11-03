@@ -91,3 +91,7 @@ export function renewalDate(expiresAt?: number | null): string {
     year: 'numeric',
   });
 }
+
+export function usd(amount: number): string {
+  return '$' + amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}

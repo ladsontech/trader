@@ -2,10 +2,13 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import { type User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
+import { countryFromIdentity } from './phone';
 
 export interface TradeBotUser {
   phoneDigits?: string;
-  country?: 'UG' | 'KE';
+  /** ISO code ('UG', 'KE', 'NG', …) or 'INTL'. */
+  country?: string;
+  /** Currency plans are priced in for this user's payment network. */
   currency?: 'UGX' | 'KES';
   /** Written by Cloud Functions only. The client cannot grant itself a plan. */
   subscriptionPlan?: 'standard' | 'premium' | null;
@@ -49,10 +52,8 @@ interface AuthContextValue {
   isBrokerConnected: boolean;
   hasSeenOnboarding: boolean;
   isAdmin: boolean;
-  country: 'UG' | 'KE';
+  country: string;
   currency: 'UGX' | 'KES';
-  setCountry: (country: 'UG' | 'KE') => void;
-  setCurrency: (currency: 'UGX' | 'KES') => void;
   refreshUserData: (currentUser?: User) => Promise<void>;
   markOnboarded: () => Promise<void>;
 }
@@ -68,48 +69,20 @@ const AuthContext = createContext<AuthContextValue>({
   isAdmin: false,
   country: 'UG',
   currency: 'UGX',
-  setCountry: () => {},
-  setCurrency: () => {},
   refreshUserData: async () => {},
   markOnboarded: async () => {},
 });
-
-function normalizePhone(value: string, country: 'UG' | 'KE' = 'UG'): string {
-  const digits = value.replace(/\D/g, '');
-  const isKenya = country === 'KE' || digits.startsWith('254');
-
-  if (isKenya) {
-    if (digits.startsWith('254') && digits.length === 12) return `0${digits.slice(3)}`;
-    if (digits.length === 9 && (digits.startsWith('7') || digits.startsWith('1'))) return `0${digits}`;
-    return digits;
-  }
-
-  if (digits.startsWith('256') && digits.length === 12) return `0${digits.slice(3)}`;
-  if (digits.length === 9 && digits.startsWith('7')) return `0${digits}`;
-  return digits;
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<TradeBotUser | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [selectedCountry, setSelectedCountry] = useState<'UG' | 'KE'>('UG');
-  const [countryOverride, setCountryOverride] = useState<'UG' | 'KE' | null>(null);
   const userRef = useRef<User | null>(null);
   userRef.current = user;
 
-  const country: 'UG' | 'KE' = countryOverride || userData?.country || selectedCountry;
-  const currency: 'UGX' | 'KES' = country === 'KE' ? 'KES' : 'UGX';
-
-  // Country is a display preference until payment; the server records the
-  // real one when a subscription is activated.
-  const setCountry = (c: 'UG' | 'KE') => {
-    setSelectedCountry(c);
-    setCountryOverride(c);
-  };
-
-  const setCurrency = (curr: 'UGX' | 'KES') => setCountry(curr === 'KES' ? 'KE' : 'UG');
+  const country = userData?.country || 'UG';
+  const currency: 'UGX' | 'KES' = userData?.currency === 'KES' || country === 'KE' ? 'KES' : 'UGX';
 
   const refreshUserData = async (currentUser?: User) => {
     const target = currentUser ?? userRef.current;
@@ -123,15 +96,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (snap.exists()) {
         const data = snap.data() as TradeBotUser;
         setUserData(data);
-        if (data.country) setSelectedCountry(data.country);
         setProfileLoaded(true);
         return;
       }
 
-      const emailPrefix = target.email?.split('@')[0] || '';
-      const isKe = emailPrefix.startsWith('254') || emailPrefix.startsWith('+254');
-      const detectedCountry: 'UG' | 'KE' = isKe ? 'KE' : 'UG';
-      const phoneDigits = normalizePhone(emailPrefix, detectedCountry);
+      const { country: detectedCountry, phoneDigits } = countryFromIdentity(target.email);
 
       const seed: TradeBotUser = {
         phoneDigits,
@@ -146,7 +115,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await setDoc(ref, seed);
         setUserData(seed);
-        setSelectedCountry(detectedCountry);
         setProfileLoaded(true);
       } catch (seedError) {
         console.warn('Could not seed the TradeBot profile, re-reading:', seedError);
@@ -154,7 +122,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (retry.exists()) {
           const retriedData = retry.data() as TradeBotUser;
           setUserData(retriedData);
-          if (retriedData.country) setSelectedCountry(retriedData.country);
           setProfileLoaded(true);
         }
       }
@@ -199,7 +166,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!snap.exists()) return;
         const fresh = snap.data() as TradeBotUser;
         setUserData(fresh);
-        if (fresh.country) setSelectedCountry(fresh.country);
         setProfileLoaded(true);
       },
       (error) => {
@@ -235,8 +201,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin,
       country,
       currency,
-      setCountry,
-      setCurrency,
       refreshUserData,
       markOnboarded,
     }),

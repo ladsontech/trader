@@ -146,6 +146,20 @@
     cursor: not-allowed;
   }
 
+  .phone-field {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    background: var(--color-canvas);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-control);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .phone-field:focus-within {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-soft);
+  }
+
   .label {
     display: block;
     margin-bottom: 0.4rem;

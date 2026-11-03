@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './lib/auth-context';
 import AppLayout from './components/layout/AppLayout';
 import AuthPage from './pages/AuthPage';
 import Subscribe from './pages/Subscribe';
+import Checkout from './pages/Checkout';
 import ConnectBroker from './pages/ConnectBroker';
 import Dashboard from './pages/Dashboard';
 import Trades from './pages/Trades';
@@ -23,7 +24,7 @@ function Booting() {
  * The paywall.
  *
  * Signed out            → /auth        (step 1: create account)
- * Signed in, unpaid     → /subscribe   (step 2: choose a plan and pay)
+ * Signed in, unpaid     → /subscribe   (step 2: choose a plan, then /checkout to pay)
  * Paid, no broker       → /broker      (step 3: connect broker)
  * Everything else       → the app      (step 4: trade)
  *
@@ -61,13 +62,15 @@ function Gate({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  if (!isSubscribed && path !== '/subscribe') {
+  const onPayment = path === '/subscribe' || path === '/checkout';
+
+  if (!isSubscribed && !onPayment) {
     return <Navigate to="/subscribe" replace />;
   }
 
-  // /subscribe stays open so a fresh payer sees "Payment received" before
-  // moving on (and so subscribers can renew).
-  if (isSubscribed && !isBrokerConnected && path !== '/broker' && path !== '/subscribe') {
+  // The payment pages stay open so a fresh payer sees "Payment received"
+  // before moving on (and so subscribers can renew).
+  if (isSubscribed && !isBrokerConnected && path !== '/broker' && !onPayment) {
     return <Navigate to="/broker" replace />;
   }
 
@@ -96,6 +99,7 @@ function AppRoutes() {
       >
         <Route path="/" element={<Dashboard />} />
         <Route path="/subscribe" element={<Subscribe />} />
+        <Route path="/checkout" element={<Checkout />} />
         <Route path="/broker" element={<ConnectBroker />} />
         <Route path="/trades" element={<Trades />} />
         <Route path="/settings" element={<Settings />} />

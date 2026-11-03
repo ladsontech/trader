@@ -17,7 +17,7 @@ import {
 
 /** Account → Plan → Broker → Trade, shown until setup is finished. */
 function SetupSteps({ step }: { step: 2 | 3 }) {
-  const steps = ['Account', 'Plan', 'Broker', 'Trade'];
+  const steps = ['Account', 'Pay', 'Broker', 'Trade'];
   return (
     <ol className="flex items-center gap-1.5 sm:gap-2" aria-label="Setup progress">
       {steps.map((label, i) => {
@@ -56,8 +56,8 @@ export default function AppLayout() {
       <div className="min-h-screen flex flex-col">
         <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur-xl">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-            <div className="w-8 h-8 shrink-0 rounded-[9px] bg-accent-soft border border-accent/25 flex items-center justify-center">
-              <Bot className="w-4 h-4 text-accent" />
+            <div className="w-8 h-8 shrink-0 rounded-[9px] bg-accent text-white flex items-center justify-center">
+              <Bot className="w-4 h-4" />
             </div>
             <SetupSteps step={isSubscribed ? 3 : 2} />
             <button
@@ -101,8 +101,8 @@ export default function AppLayout() {
       <header className="sticky top-0 z-40 h-14 border-b border-line bg-canvas/85 backdrop-blur-xl">
         <div className="h-full max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-[9px] bg-accent-soft border border-accent/25 flex items-center justify-center">
-              <Bot className="w-4 h-4 text-accent" />
+            <div className="w-8 h-8 rounded-[9px] bg-accent text-white flex items-center justify-center">
+              <Bot className="w-4 h-4" />
             </div>
             <span className="text-[15px] font-semibold tracking-tight">TradeBot</span>
           </div>
