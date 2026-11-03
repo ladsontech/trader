@@ -17,7 +17,12 @@ functions are deployed as a **separate Firebase codebase** (`tradebot`).
 - The Uganda/Kenya buttons are gone (sign-up, plan page, settings). On the plan
   page the currency follows the mobile-money number: +256 → UGX, +254 → KES.
   Mobile-money payment still only works with Uganda or Kenya numbers (Marz Pay).
-- No function or rules changes are needed; `npm run build && vercel --prod` is enough.
+- Plans are priced in USD: Standard **$15**, Premium **$30** a year, charged as
+  UGX 55,500 / 111,000 (or KES 1,950 / 3,900 from a +254 number). The amount
+  charged comes from `functions/src/config.ts`, so **redeploy the functions**
+  (`firebase deploy --only functions:tradebot`) at the same time as the site,
+  or the site will show the new price while mobile money charges the old one.
+- Paying is now two pages: `/subscribe` picks a plan, `/checkout?plan=…` pays.
 
 ## 0. October 2026 fixes (deploy these)
 

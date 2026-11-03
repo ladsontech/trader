@@ -12,6 +12,8 @@ export interface Plan {
   id: PlanId;
   name: string;
   tagline: string;
+  /** Headline price shown to users. UGX/KES below are what mobile money charges. */
+  priceUsd: number;
   price: number; // UGX fallback
   priceUgx: number;
   priceKes: number;
@@ -28,9 +30,10 @@ export const PLANS: Plan[] = [
     id: 'standard',
     name: 'Standard',
     tagline: 'The three majors, traded carefully.',
-    price: 50000,
-    priceUgx: 50000,
-    priceKes: 1800,
+    priceUsd: 15,
+    price: 55500,
+    priceUgx: 55500,
+    priceKes: 1950,
     durationDays: 365,
     pairs: 'EUR/USD · GBP/USD · USD/JPY',
     riskPercent: 0.5,
@@ -46,9 +49,10 @@ export const PLANS: Plan[] = [
     id: 'premium',
     name: 'Premium',
     tagline: 'Every pair the bot trades, including gold.',
-    price: 100000,
-    priceUgx: 100000,
-    priceKes: 3500,
+    priceUsd: 30,
+    price: 111000,
+    priceUgx: 111000,
+    priceKes: 3900,
     durationDays: 365,
     pairs: '7 forex pairs + XAU/USD',
     riskPercent: 1,

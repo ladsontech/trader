@@ -4,7 +4,7 @@ const flow = new URLSearchParams(location.search).get('screen') === 'flow';
 let paid = false;
 export const initiateSubscription = async (planId = 'premium') => {
   (window as any).__calls = [...((window as any).__calls || []), ['initiateSubscription', planId]];
-  return { success: true, reused: false, reference: 'r', planId, amount: 100000 };
+  return { success: true, reused: false, reference: 'r', planId, amount: 111000 };
 };
 export const checkPayment = async () => {
   if (!flow) return { status: 'pending' as const, failureReason: null };

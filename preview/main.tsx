@@ -5,6 +5,7 @@ import './preview.css';
 import AppLayout from '../src/components/layout/AppLayout';
 import AuthPage from '../src/pages/AuthPage';
 import Subscribe from '../src/pages/Subscribe';
+import Checkout from '../src/pages/Checkout';
 import ConnectBroker from '../src/pages/ConnectBroker';
 import Dashboard from '../src/pages/Dashboard';
 import Trades from '../src/pages/Trades';
@@ -22,6 +23,7 @@ const inApp: Record<string, { path: string; el: React.ReactNode }> = {
   trades: { path: '/trades', el: <Trades /> },
   broker: { path: '/broker', el: <ConnectBroker /> },
   subscribe: { path: '/subscribe', el: <Subscribe /> },
+  checkout: { path: '/checkout?plan=premium', el: <Checkout /> },
   settings: { path: '/settings', el: <Settings /> },
 };
 
@@ -37,7 +39,7 @@ root.render(
       <MemoryRouter initialEntries={[inApp[screen].path]}>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route path={inApp[screen].path} element={inApp[screen].el} />
+            <Route path={inApp[screen].path.split('?')[0]} element={inApp[screen].el} />
           </Route>
         </Routes>
       </MemoryRouter>

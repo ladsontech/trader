@@ -420,7 +420,7 @@ export default function Admin() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-ink">Standard Bot</p>
-                      <p className="text-[11px] text-ink-soft">UGX 50,000 / KES 1,800</p>
+                      <p className="text-[11px] text-ink-soft">$15 · UGX 55,500 / KES 1,950</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -436,7 +436,7 @@ export default function Admin() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-ink">VIP Premium Bot</p>
-                      <p className="text-[11px] text-ink-soft">UGX 100,000 / KES 3,500</p>
+                      <p className="text-[11px] text-ink-soft">$30 · UGX 111,000 / KES 3,900</p>
                     </div>
                   </div>
                   <div className="text-right">

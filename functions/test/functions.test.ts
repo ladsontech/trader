@@ -64,8 +64,8 @@ describe("payments", () => {
 
   it("charges the server-side price and remembers Marz Pay's transaction id", async () => {
     const { res, calls } = await startPayment();
-    expect(res).toMatchObject({ success: true, amount: 50000, currency: "UGX" });
-    expect(calls[0].body).toMatchObject({ amount: "50000", phone_number: "+256770123456", country: "UG" });
+    expect(res).toMatchObject({ success: true, amount: 55500, currency: "UGX" });
+    expect(calls[0].body).toMatchObject({ amount: "55500", phone_number: "+256770123456", country: "UG" });
     const tx = store.docs.get(`tradebot_transactions/${res.reference}`)!;
     expect(tx.status).toBe("pending");
     expect(tx.providerUuid).toBe("mp-uuid-1");
