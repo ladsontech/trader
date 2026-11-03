@@ -4,7 +4,6 @@ import { MemoryRouter, Routes, Route } from 'react-router';
 import './preview.css';
 import AppLayout from '../src/components/layout/AppLayout';
 import AuthPage from '../src/pages/AuthPage';
-import Onboarding from '../src/pages/Onboarding';
 import Subscribe from '../src/pages/Subscribe';
 import ConnectBroker from '../src/pages/ConnectBroker';
 import Dashboard from '../src/pages/Dashboard';
@@ -16,7 +15,6 @@ const screen = new URLSearchParams(location.search).get('screen') || 'dashboard'
 
 const chromeless: Record<string, React.ReactNode> = {
   auth: <AuthPage />,
-  onboarding: <Onboarding />,
 };
 
 const inApp: Record<string, { path: string; el: React.ReactNode }> = {

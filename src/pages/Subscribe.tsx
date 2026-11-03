@@ -6,17 +6,28 @@ import { useAuth } from '../lib/auth-context';
 import { PLANS, getPlanPrice, planById } from '../lib/constants';
 import { checkPayment, initiateSubscription, cancelPayment, apiErrorMessage } from '../lib/api';
 import { formatLocalMoney, remainingLabel, renewalDate } from '../lib/format';
+import { PAYMENT_DIALS, parsePhone, splitStoredPhone } from '../lib/phone';
 import { Button, Card, Field, Notice, cx } from '../components/ui';
-import { ArrowRight, Check, CheckCircle2, Crown, Loader2, Smartphone, Sparkles, XCircle, Zap } from 'lucide-react';
+import { PhoneInput } from '../components/PhoneInput';
+import { ArrowRight, Check, CheckCircle2, Crown, Loader2, Smartphone, XCircle } from 'lucide-react';
 
 type TxState = 'idle' | 'waiting' | 'completed' | 'failed';
 
 const pendingKey = (uid: string) => `tradebot.pendingPayment.${uid}`;
 
 export default function Subscribe() {
-  const { user, userData, isSubscribed, country, currency, setCountry } = useAuth();
+  const { user, userData, isSubscribed } = useAuth();
   const [selected, setSelected] = useState<'standard' | 'premium'>('premium');
-  const [phone, setPhone] = useState(userData?.phoneDigits || '');
+  // Pre-fill the number they signed up with when it can receive a mobile
+  // money prompt; otherwise start from +256 with an empty box.
+  const [payDial, setPayDial] = useState(() => {
+    const stored = splitStoredPhone(userData?.phoneDigits, userData?.country);
+    return PAYMENT_DIALS.includes(stored.dial) ? stored.dial : '256';
+  });
+  const [phone, setPhone] = useState(() => {
+    const stored = splitStoredPhone(userData?.phoneDigits, userData?.country);
+    return PAYMENT_DIALS.includes(stored.dial) ? stored.number : '';
+  });
   const [state, setState] = useState<TxState>('idle');
   const [reference, setReference] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -26,6 +37,8 @@ export default function Subscribe() {
   const submittingRef = useRef(false);
 
   const plan = PLANS.find((p) => p.id === selected)!;
+  const country: 'UG' | 'KE' = payDial === '254' ? 'KE' : 'UG';
+  const currency: 'UGX' | 'KES' = country === 'KE' ? 'KES' : 'UGX';
   const isKenya = country === 'KE';
   const planPrice = getPlanPrice(plan, currency);
 
@@ -35,10 +48,16 @@ export default function Subscribe() {
     const saved = localStorage.getItem(pendingKey(user.uid));
     if (!saved) return;
     try {
-      const parsed = JSON.parse(saved) as { reference?: string; planId?: 'standard' | 'premium'; phone?: string };
+      const parsed = JSON.parse(saved) as {
+        reference?: string;
+        planId?: 'standard' | 'premium';
+        phone?: string;
+        dial?: string;
+      };
       if (!parsed.reference) throw new Error('empty');
       setReference(parsed.reference);
       if (parsed.planId) setSelected(parsed.planId);
+      if (parsed.dial) setPayDial(parsed.dial);
       if (parsed.phone) setPhone(parsed.phone);
       setState('waiting');
     } catch {
@@ -92,13 +111,13 @@ export default function Subscribe() {
     event.preventDefault();
     if (submittingRef.current || state === 'waiting') return;
 
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 9) {
-      setError(
-        isKenya
-          ? 'Enter the M-Pesa number to charge, for example 0712345678.'
-          : 'Enter the mobile money number to charge, for example 0770123456.'
-      );
+    const parsed = parsePhone(payDial, phone);
+    if (!PAYMENT_DIALS.includes(parsed.dial)) {
+      setError('Mobile money payments work with Uganda (+256) or Kenya (+254) numbers.');
+      return;
+    }
+    if (!parsed.ok) {
+      setError(parsed.error || 'Enter the mobile money number to charge.');
       return;
     }
 
@@ -108,11 +127,11 @@ export default function Subscribe() {
     setNotice('');
 
     try {
-      const result = await initiateSubscription(plan.id, digits, country);
+      const result = await initiateSubscription(plan.id, parsed.international, country);
       if (user) {
         localStorage.setItem(
           pendingKey(user.uid),
-          JSON.stringify({ reference: result.reference, planId: plan.id, phone: digits })
+          JSON.stringify({ reference: result.reference, planId: plan.id, phone, dial: payDial })
         );
       }
       setReference(result.reference);
@@ -157,10 +176,7 @@ export default function Subscribe() {
   /* ── Waiting for PIN ────────────────────────────────────────── */
   if (state === 'waiting') {
     const formattedAmount = formatLocalMoney(planPrice, currency);
-    const trimmedPhone = phone.trim();
-    const displayPhone = trimmedPhone.startsWith('0') || trimmedPhone.startsWith('+')
-      ? trimmedPhone
-      : `0${trimmedPhone}`;
+    const displayPhone = parsePhone(payDial, phone).international;
 
     return (
       <div className="max-w-md mx-auto fade-up">
@@ -259,6 +275,8 @@ export default function Subscribe() {
             <PayForm
               phone={phone}
               setPhone={setPhone}
+              dial={payDial}
+              setDial={setPayDial}
               amount={planPrice}
               currency={currency}
               country={country}
@@ -308,45 +326,15 @@ export default function Subscribe() {
   return (
     <div className="max-w-2xl fade-up">
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-ink">
           Choose your plan
         </h1>
-        <p className="text-sm text-ink-soft mt-2 max-w-md mx-auto leading-relaxed">
-          {isKenya
-            ? 'One payment covers a full year via Safaricom M-Pesa. The bot starts as soon as you connect your broker.'
-            : 'One payment covers a full year via MTN or Airtel Mobile Money. The bot starts as soon as you connect your broker.'}
+        <p className="text-sm text-ink-soft mt-1.5 max-w-md leading-relaxed">
+          One payment covers a full year. Pay with mobile money, then connect your broker and
+          the bot starts trading.
         </p>
 
-        {/* Region Switcher */}
-        <div className="flex items-center justify-center gap-1 mt-4">
-          <div className="flex items-center gap-1 bg-surface border border-line p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setCountry('UG')}
-              className={cx(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer',
-                country === 'UG'
-                  ? 'bg-raised text-ink border border-line-strong shadow-xs'
-                  : 'text-ink-faint hover:text-ink-soft'
-              )}
-            >
-              <span>🇺🇬</span> UGX
-            </button>
-            <button
-              type="button"
-              onClick={() => setCountry('KE')}
-              className={cx(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer',
-                country === 'KE'
-                  ? 'bg-raised text-ink border border-line-strong shadow-xs'
-                  : 'text-ink-faint hover:text-ink-soft'
-              )}
-            >
-              <span>🇰🇪</span> KES
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Plan cards */}
@@ -376,6 +364,8 @@ export default function Subscribe() {
           <PayForm
             phone={phone}
             setPhone={setPhone}
+            dial={payDial}
+            setDial={setPayDial}
             amount={planPrice}
             currency={currency}
             country={country}
@@ -408,96 +398,64 @@ function PlanCards({
   locked: boolean;
 }) {
   return (
-    <div className="grid sm:grid-cols-2 gap-4">
+    <div className="grid sm:grid-cols-2 gap-3" role="radiogroup" aria-label="Plan">
       {PLANS.map((p) => {
         const active = selected === p.id;
-        const price = getPlanPrice(p, currency);
-        const isPremium = p.recommended;
-
         return (
           <button
             key={p.id}
             type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={`${p.name} plan`}
             disabled={locked}
             onClick={() => onSelect(p.id)}
             className={cx(
-              'plan-card group relative text-center p-5 pt-6 rounded-[18px] border-2 transition-all duration-200 cursor-pointer disabled:cursor-not-allowed',
-              active
-                ? isPremium
-                  ? 'border-accent bg-accent/[0.05] shadow-[0_0_24px_-4px_rgba(14,159,119,0.18)]'
-                  : 'border-accent/60 bg-accent/[0.03]'
-                : 'border-line bg-surface hover:border-line-strong hover:bg-surface-2'
+              'plan-card relative text-left p-4 rounded-[16px] border-2 transition-all cursor-pointer disabled:cursor-not-allowed',
+              active ? 'border-accent bg-accent/[0.04]' : 'border-line bg-surface hover:border-line-strong'
             )}
           >
-            {/* Popular badge */}
-            {isPremium && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-[11px] font-bold uppercase tracking-wider text-[#ffffff] shadow-md">
-                  <Crown className="w-3 h-3" />
-                  Popular
-                </span>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[15px] font-bold text-ink">{p.name}</h3>
+                  {p.recommended && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent text-[10px] font-bold uppercase tracking-wider text-white">
+                      <Crown className="w-2.5 h-2.5" />
+                      Popular
+                    </span>
+                  )}
+                </div>
+                <p className="text-[12px] text-ink-soft mt-0.5">{p.tagline}</p>
               </div>
-            )}
-
-            {/* Plan icon */}
-            <div className={cx(
-              'w-10 h-10 rounded-[12px] flex items-center justify-center mx-auto mb-3',
-              active
-                ? 'bg-accent/15 text-accent'
-                : 'bg-surface-2 border border-line text-ink-faint'
-            )}>
-              {isPremium ? <Sparkles className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+              <span
+                className={cx(
+                  'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5',
+                  active ? 'border-accent bg-accent text-white' : 'border-line-strong'
+                )}
+              >
+                {active && <Check className="w-3 h-3" strokeWidth={3} />}
+              </span>
             </div>
 
-            {/* Plan name */}
-            <h3 className="text-[16px] font-bold text-ink">{p.name}</h3>
-
-            {/* Price */}
-            <p className="mt-3 mb-1">
-              <span className="tnum text-[28px] font-extrabold text-ink leading-none">
-                {formatLocalMoney(price, currency)}
+            <p className="mt-3">
+              <span className="tnum text-[22px] font-bold text-ink">
+                {formatLocalMoney(getPlanPrice(p, currency), currency)}
               </span>
-            </p>
-            <span className="text-[12px] text-ink-faint font-medium">/ year</span>
-
-            {/* Tagline */}
-            <p className="text-[12px] text-ink-soft mt-3 leading-relaxed px-2">
-              {p.tagline}
+              <span className="text-[12px] text-ink-faint font-medium"> / year</span>
             </p>
 
-            {/* Divider */}
-            <div className="w-10 h-px bg-line mx-auto my-4" />
-
-            {/* Features */}
-            <ul className="space-y-2.5 text-left">
+            <ul className="mt-3 space-y-1.5">
               {p.features.map((f) => (
-                <li key={f} className="flex items-start gap-2.5 text-[12.5px] text-ink-soft">
-                  <span className={cx(
-                    'w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5',
-                    active ? 'bg-accent/15 text-accent' : 'bg-surface-3 text-ink-faint'
-                  )}>
-                    <Check className="w-2.5 h-2.5" strokeWidth={3} />
-                  </span>
+                <li key={f} className="flex items-start gap-2 text-[12.5px] text-ink-soft">
+                  <Check
+                    className={cx('w-3.5 h-3.5 shrink-0 mt-0.5', active ? 'text-accent' : 'text-ink-faint')}
+                    strokeWidth={3}
+                  />
                   <span>{f}</span>
                 </li>
               ))}
             </ul>
-
-            {/* Select button */}
-            <div className={cx(
-              'mt-5 py-2.5 rounded-[10px] text-[13px] font-semibold transition-all duration-200',
-              active
-                ? 'bg-accent text-[#ffffff]'
-                : 'bg-surface-2 border border-line text-ink-soft group-hover:border-line-strong'
-            )}>
-              {active ? (
-                <span className="flex items-center justify-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Selected
-                </span>
-              ) : (
-                `Get ${p.name}`
-              )}
-            </div>
           </button>
         );
       })}
@@ -508,6 +466,8 @@ function PlanCards({
 function PayForm({
   phone,
   setPhone,
+  dial,
+  setDial,
   amount,
   currency,
   country,
@@ -517,6 +477,8 @@ function PayForm({
 }: {
   phone: string;
   setPhone: (v: string) => void;
+  dial: string;
+  setDial: (v: string) => void;
   amount: number;
   currency: 'UGX' | 'KES';
   country: 'UG' | 'KE';
@@ -525,7 +487,6 @@ function PayForm({
   disabled: boolean;
 }) {
   const isKenya = country === 'KE';
-  const dialCode = isKenya ? '+254' : '+256';
 
   return (
     <Card className="p-4">
@@ -534,26 +495,19 @@ function PayForm({
           label={isKenya ? 'M-Pesa phone number' : 'Mobile Money number'}
           help={
             isKenya
-              ? 'Safaricom M-Pesa or Airtel Money. An STK PIN prompt goes to this handset.'
-              : 'MTN or Airtel Uganda. The PIN prompt goes to this number.'
+              ? 'Safaricom M-Pesa or Airtel Kenya. A PIN prompt is sent to this phone.'
+              : 'MTN or Airtel Uganda. A PIN prompt is sent to this phone. Paying from Kenya? Switch the code to +254.'
           }
         >
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-ink-faint tnum pointer-events-none border-r border-line pr-2.5">
-              {dialCode}
-            </span>
-            <input
-              id="subscribe-phone"
-              type="tel"
-              inputMode="numeric"
-              required
-              disabled={disabled}
-              placeholder={isKenya ? '712 345 678 or 140 123 456' : '770 123 456'}
-              className="field tnum pl-[74px]"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
+          <PhoneInput
+            id="subscribe-phone"
+            dial={dial}
+            onDialChange={setDial}
+            value={phone}
+            onChange={setPhone}
+            disabled={disabled}
+            only={PAYMENT_DIALS}
+          />
         </Field>
 
         <div className="flex items-center justify-between pt-1">

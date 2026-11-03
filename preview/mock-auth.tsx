@@ -47,8 +47,6 @@ export const useAuth = () => {
     isAdmin: false,
     country: 'UG' as const,
     currency: 'UGX' as const,
-    setCountry: () => {},
-    setCurrency: () => {},
     refreshUserData: async () => {},
     markOnboarded: async () => {},
   };

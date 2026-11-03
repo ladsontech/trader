@@ -26,13 +26,35 @@ let n = 0;
 const step = (s) => console.log(`${++n}. ${s}`);
 
 try {
+  // ── Sign-up form ──
+  await page.goto('http://127.0.0.1:4401/?screen=auth');
+  await page.getByText('Start auto-trading').waitFor();
+  if (!(await page.getByText('+256', { exact: true }).isVisible())) throw new Error('default code is not +256');
+  if (await page.getByRole('button', { name: /Kenya/ }).count()) throw new Error('country buttons still shown');
+  step('Sign-up opens with +256 (Uganda) as the default code, no country buttons');
+  await page.getByLabel('Country').selectOption('254');
+  await page.getByText('+254', { exact: true }).waitFor();
+  step('Country picker switches the code to +254');
+  await page.getByLabel('Country').selectOption({ label: '🌍 Other country — type code' });
+  await page.getByLabel('Country code').fill('233');
+  await page.locator('#auth-phone').fill('12');
+  await page.locator('#auth-password').fill('secret1');
+  await page.locator('#auth-submit').click();
+  await page.getByText('Enter a valid phone number.').waitFor();
+  step('Other country: code typed by hand (+233), short number rejected');
+  await page.locator('#auth-phone').fill('+254 712 345 678');
+  await page.getByText('+254', { exact: true }).waitFor();
+  if ((await page.locator('#auth-phone').inputValue()) !== '712345678') throw new Error('pasted code not split');
+  step('Pasting "+254 712…" moves the code into the picker');
+  await page.screenshot({ path: 'shots/flow-0-signup.png', fullPage: true });
+
   await page.goto('http://127.0.0.1:4401/?screen=flow');
   await page.waitForURL('**/subscribe');
   await page.getByText('Choose your plan').waitFor();
   step('Signed-in, unpaid user lands on Choose your plan (step 2), no menu');
   if (await page.getByText('Trades', { exact: true }).count()) throw new Error('nav visible during setup');
 
-  await page.getByRole('button', { name: /Standard/ }).first().click();
+  await page.getByRole('radio', { name: /Standard/ }).click();
   await page.getByText('UGX 50,000').last().waitFor();
   await page.getByRole('button', { name: 'Send payment request' }).click();
   await page.getByText('Waiting for your PIN').waitFor();

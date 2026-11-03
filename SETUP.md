@@ -8,6 +8,17 @@ functions are deployed as a **separate Firebase codebase** (`tradebot`).
 
 ---
 
+## 0a. November 2026 — sign-up and UI cleanup (frontend only)
+
+- Sign-up is one phone field + one password. The country code defaults to
+  **+256**; users pick another country from the list or choose *Other* and type
+  any code. Uganda and Kenya accounts keep their old login format, so existing
+  users sign in as before. Other countries sign in as `<code><number>@investio.app`.
+- The Uganda/Kenya buttons are gone (sign-up, plan page, settings). On the plan
+  page the currency follows the mobile-money number: +256 → UGX, +254 → KES.
+  Mobile-money payment still only works with Uganda or Kenya numbers (Marz Pay).
+- No function or rules changes are needed; `npm run build && vercel --prod` is enough.
+
 ## 0. October 2026 fixes (deploy these)
 
 Found while testing the live site. **Deploy the functions and the rules below.**

@@ -16,11 +16,12 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
+import { countryName, flagFor } from '../lib/phone';
 
 interface UserRecord {
   id: string;
   phoneDigits?: string;
-  country?: 'UG' | 'KE';
+  country?: string;
   currency?: 'UGX' | 'KES';
   subscriptionPlan?: 'standard' | 'premium' | null;
   subscriptionStatus?: 'active' | 'expired' | 'none';
@@ -65,7 +66,7 @@ export default function Admin() {
 
   // Filters for Users tab
   const [userSearch, setUserSearch] = useState('');
-  const [userCountryFilter, setUserCountryFilter] = useState<'ALL' | 'UG' | 'KE'>('ALL');
+  const [userCountryFilter, setUserCountryFilter] = useState<'ALL' | 'UG' | 'KE' | 'OTHER'>('ALL');
   const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'active' | 'expired' | 'none'>('ALL');
 
   // Filters for Deposits tab
@@ -188,7 +189,8 @@ export default function Admin() {
       }
       if (userCountryFilter !== 'ALL') {
         const uCountry = u.country || 'UG';
-        if (uCountry !== userCountryFilter) return false;
+        const bucket = uCountry === 'UG' || uCountry === 'KE' ? uCountry : 'OTHER';
+        if (bucket !== userCountryFilter) return false;
       }
       if (userStatusFilter !== 'ALL') {
         const isAct =
@@ -519,7 +521,7 @@ export default function Admin() {
                   <div key={u.id} className="py-2.5 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-3">
                       <span className="chip text-[10px]">
-                        {u.country === 'KE' ? '🇰🇪' : '🇺🇬'}
+                        {flagFor(u.country || 'UG')}
                       </span>
                       <div>
                         <p className="font-bold text-ink tnum">{u.phoneDigits || u.id.slice(0, 8)}</p>
@@ -575,6 +577,7 @@ export default function Admin() {
                 <option value="ALL">All Regions</option>
                 <option value="UG">Uganda (UGX)</option>
                 <option value="KE">Kenya (KES)</option>
+                <option value="OTHER">Other countries</option>
               </select>
 
               <select
@@ -642,7 +645,7 @@ export default function Admin() {
 
                         <td className="px-3.5 py-3">
                           <span className="chip text-[11px]">
-                            {u.country === 'KE' ? '🇰🇪 Kenya' : '🇺🇬 Uganda'}
+                            {flagFor(u.country || 'UG')} {countryName(u.country || 'UG')}
                           </span>
                         </td>
 

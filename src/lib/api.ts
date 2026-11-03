@@ -211,7 +211,7 @@ export function setBotEnabled(enabled: boolean) {
 export interface AdminUser {
   id: string;
   phoneDigits: string | null;
-  country: 'UG' | 'KE' | null;
+  country: string | null;
   currency: 'UGX' | 'KES' | null;
   subscriptionPlan: 'standard' | 'premium' | null;
   subscriptionStatus: 'active' | 'expired' | 'none';
