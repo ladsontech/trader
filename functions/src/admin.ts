@@ -1,33 +1,32 @@
 /**
  * Admin data for the /admin screen.
  *
- * Who is an admin is decided HERE, from the caller's verified Firebase sign-in
- * (their phone number), not in the browser. The old screen unlocked with a
- * password that was shipped inside the website's JavaScript, so anyone could
- * read it. Set TRADEBOT_ADMIN_PHONES in functions/.env to change the list
- * (comma separated, e.g. "0753894149,0700000000").
+ * Admin access is determined on the server from the caller's Firestore
+ * profile (`tradebot_users/{uid}.isAdmin === true` or `role === "admin"`),
+ * with optional TRADEBOT_ADMIN_PHONES in functions/.env. No single phone
+ * number is hardcoded in the codebase.
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { db } from "./firebase";
 import { COL } from "./config";
 import { normalizePhone, timestampToMillis } from "./util";
 
-const DEFAULT_ADMIN_PHONES = "0753894149";
-
 export function adminPhones(): string[] {
-  return (process.env.TRADEBOT_ADMIN_PHONES || DEFAULT_ADMIN_PHONES)
+  return (process.env.TRADEBOT_ADMIN_PHONES || "")
     .split(",")
     .map((p) => normalizePhone(p.trim()))
     .filter(Boolean);
 }
 
-/** Sign-in identities look like "0753894149@investio.app" or "254712345678@investio.app". */
+/** Optional env-configured admin phones ("0753894149@investio.app", etc.). */
 export function isAdminEmail(email?: string | null): boolean {
+  const phones = adminPhones();
+  if (phones.length === 0) return false;
   const prefix = (email || "").split("@")[0] || "";
   const digits = prefix.replace(/\D/g, "");
   if (!digits) return false;
   const local = normalizePhone(digits, digits.startsWith("254") ? "KE" : "UG");
-  return adminPhones().includes(local);
+  return phones.includes(local);
 }
 
 const ms = (v: unknown) => timestampToMillis(v) || (typeof v === "string" ? Date.parse(v) || 0 : 0);
@@ -35,14 +34,15 @@ const ms = (v: unknown) => timestampToMillis(v) || (typeof v === "string" ? Date
 export const tbAdminData = onCall({ timeoutSeconds: 60 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in first.");
 
-  let callerIsAdmin = isAdminEmail(request.auth.token.email);
+  const callerSnap = await db.collection(COL.users).doc(request.auth.uid).get();
+  const callerData = callerSnap.exists ? callerSnap.data() : null;
+  const callerIsAdmin =
+    Boolean(callerData?.isAdmin) ||
+    callerData?.role === "admin" ||
+    isAdminEmail(request.auth.token.email);
+
   if (!callerIsAdmin) {
-    const callerSnap = await db.collection(COL.users).doc(request.auth.uid).get();
-    const callerData = callerSnap.exists ? callerSnap.data() : null;
-    callerIsAdmin = Boolean(callerData?.isAdmin) || callerData?.role === "admin";
-  }
-  if (!callerIsAdmin) {
-    throw new HttpsError("permission-denied", "This page is for TradeBot administrators only.");
+    throw new HttpsError("permission-denied", "This page is for administrators only.");
   }
 
   const [usersSnap, txSnap] = await Promise.all([

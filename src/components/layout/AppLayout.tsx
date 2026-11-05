@@ -30,9 +30,9 @@ function SetupSteps({ step }: { step: 2 | 3 }) {
               aria-current={current ? 'step' : undefined}
               className={cx(
                 'flex items-center gap-1.5 h-7 rounded-full px-2.5 text-[12px] font-semibold border',
-                current && 'bg-accent text-[#ffffff] border-accent',
+                current && 'bg-ink text-white border-ink',
                 done && 'border-accent/30 text-accent bg-accent-soft',
-                !current && !done && 'border-line text-ink-faint'
+                !current && !done && 'border-line text-ink-faint bg-surface'
               )}
             >
               {done ? <Check className="w-3.5 h-3.5" strokeWidth={3} /> : <span className="tnum">{n}</span>}
@@ -53,15 +53,15 @@ export default function AppLayout() {
   // no menu, no dashboard tabs that would just bounce them back.
   if (!isAdmin && (!isSubscribed || !isBrokerConnected)) {
     return (
-      <div className="min-h-screen flex flex-col">
-        <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur-xl">
+      <div className="min-h-screen flex flex-col bg-canvas">
+        <header className="sticky top-0 z-40 border-b border-line bg-surface">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
             <BrandMark size={32} />
             <SetupSteps step={isSubscribed ? 3 : 2} />
             <button
               type="button"
               onClick={() => signOut(auth)}
-              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[9px] text-ink-faint hover:text-ink hover:bg-surface cursor-pointer"
+              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-[9px] text-ink-faint hover:text-ink hover:bg-surface-2 cursor-pointer"
               aria-label="Sign out"
               title="Sign out"
             >
@@ -94,10 +94,10 @@ export default function AppLayout() {
         : { tone: 'warn', label: 'Paused' };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-canvas">
       {/* Top bar */}
-      <header className="sticky top-0 z-40 h-14 border-b border-line bg-canvas/85 backdrop-blur-xl">
-        <div className="h-full max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 h-14 border-b border-line bg-surface">
+        <div className="h-full max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
           <BrandLogo size={32} className="text-[15px]" />
 
           <div className="flex items-center gap-2">
@@ -117,10 +117,10 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <div className="flex-1 w-full max-w-5xl mx-auto flex">
+      <div className="flex-1 w-full max-w-6xl mx-auto flex">
         {/* Desktop nav */}
-        <nav className="hidden md:block w-52 shrink-0 border-r border-line py-6 px-3">
-          <ul className="space-y-0.5 sticky top-20">
+        <nav className="hidden md:block w-52 shrink-0 border-r border-line bg-surface/60 py-6 px-3">
+          <ul className="space-y-1 sticky top-20">
             {NAV.map(({ to, label, icon: Icon, end }) => (
               <li key={to}>
                 <NavLink
@@ -128,10 +128,10 @@ export default function AppLayout() {
                   end={end}
                   className={({ isActive }) =>
                     cx(
-                      'flex items-center gap-2.5 px-3 py-2 rounded-[9px] text-[13.5px] font-medium transition-colors',
+                      'flex items-center gap-2.5 px-3 py-2.5 rounded-[9px] text-[13.5px] font-semibold transition-colors',
                       isActive
-                        ? 'bg-surface-2 text-ink'
-                        : 'text-ink-soft hover:text-ink hover:bg-surface/70'
+                        ? 'bg-ink text-white'
+                        : 'text-ink-soft hover:text-ink hover:bg-surface-2'
                     )
                   }
                 >
@@ -150,7 +150,7 @@ export default function AppLayout() {
       </div>
 
       {/* Mobile nav */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-line bg-canvas/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
         <ul className="flex">
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <li key={to} className="flex-1">
@@ -159,8 +159,8 @@ export default function AppLayout() {
                 end={end}
                 className={({ isActive }) =>
                   cx(
-                    'flex flex-col items-center gap-1 py-2.5 text-[10.5px] font-medium transition-colors',
-                    isActive ? 'text-accent' : 'text-ink-faint'
+                    'flex flex-col items-center gap-1 py-2.5 text-[10.5px] font-semibold transition-colors',
+                    isActive ? 'text-ink' : 'text-ink-faint'
                   )
                 }
               >

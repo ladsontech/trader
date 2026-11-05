@@ -96,10 +96,10 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-4xl">
-      <div className="flex items-start justify-between gap-4 mb-6">
+      <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-xl sm:text-2xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-ink-soft mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold">Dashboard</h1>
+          <p className="text-[13px] text-ink-soft mt-1">
             {running ? (
               <span className="inline-flex items-center gap-1.5">
                 <StatusDot tone="up" />
@@ -135,36 +135,58 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Account numbers, straight from the broker */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat
-          label="Equity"
-          value={money(account?.equity ?? 0, currency)}
-          hint={`Balance ${money(account?.balance ?? 0, currency)}`}
-        />
-        <Stat
-          label="Open P&L"
-          value={signedMoney(floating, currency)}
-          tone={floating > 0 ? 'up' : floating < 0 ? 'down' : 'neutral'}
-          hint={`${account?.openPositions ?? trades?.stats.openCount ?? 0} open`}
-        />
-        <Stat
-          label="Closed (30d)"
-          value={signedMoney(realized, currency)}
-          tone={realized > 0 ? 'up' : realized < 0 ? 'down' : 'neutral'}
-          hint={`${trades?.stats.closedCount ?? 0} trades`}
-        />
-        <Stat
-          label="Win rate"
-          value={trades ? percent(trades.stats.winRate) : '—'}
-          hint={
-            trades ? `${trades.stats.wins}W / ${trades.stats.losses}L` : 'No history yet'
-          }
-        />
-      </div>
+      {/* Exness Personal Area style MT5 account summary banner */}
+      <Card className="p-5 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-line">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded bg-[#ffcf01] px-2 py-0.5 text-[11px] font-bold text-[#0b0e11]">
+              {account?.broker || userData?.broker || 'MT5'}
+            </span>
+            <span className="chip">MT5 Real</span>
+            {(account?.accountMasked || userData?.brokerAccountId) && (
+              <span className="chip tnum">#{account?.accountMasked || userData?.brokerAccountId}</span>
+            )}
+            {(account?.server || userData?.brokerServer) && (
+              <span className="text-[12px] text-ink-faint hidden sm:inline">
+                {account?.server || userData?.brokerServer}
+              </span>
+            )}
+          </div>
+          {account?.leverage && (
+            <span className="chip tnum">1:{account.leverage}</span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+          <Stat
+            label="Equity"
+            value={money(account?.equity ?? 0, currency)}
+            hint={`Balance ${money(account?.balance ?? 0, currency)}`}
+          />
+          <Stat
+            label="Open P&L"
+            value={signedMoney(floating, currency)}
+            tone={floating > 0 ? 'up' : floating < 0 ? 'down' : 'neutral'}
+            hint={`${account?.openPositions ?? trades?.stats.openCount ?? 0} open`}
+          />
+          <Stat
+            label="Closed (30d)"
+            value={signedMoney(realized, currency)}
+            tone={realized > 0 ? 'up' : realized < 0 ? 'down' : 'neutral'}
+            hint={`${trades?.stats.closedCount ?? 0} trades`}
+          />
+          <Stat
+            label="Win rate"
+            value={trades ? percent(trades.stats.winRate) : '—'}
+            hint={
+              trades ? `${trades.stats.wins}W / ${trades.stats.losses}L` : 'No history yet'
+            }
+          />
+        </div>
+      </Card>
 
       {/* Bot control */}
-      <Card className="p-4 mt-4">
+      <Card className="p-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 rounded-[10px] bg-surface-2 border border-line flex items-center justify-center text-ink-soft shrink-0">
@@ -212,12 +234,12 @@ export default function Dashboard() {
       </Card>
 
       {/* Open positions */}
-      <div className="mt-8">
+      <div className="mt-7">
         <SectionTitle
           title="Open positions"
           subtitle="Live from your broker account."
           action={
-            <Link to="/trades" className="text-[13px] text-accent hover:underline">
+            <Link to="/trades" className="text-[13px] font-semibold text-accent hover:underline">
               All trades
             </Link>
           }
@@ -234,21 +256,21 @@ export default function Dashboard() {
               <div
                 key={position.id}
                 className={cx(
-                  'px-4 py-3.5 flex items-center justify-between gap-4',
+                  'px-4 py-3.5 flex items-center justify-between gap-4 hover:bg-surface-2/40 transition-colors',
                   index > 0 && 'border-t border-line'
                 )}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-semibold">
+                    <span className="text-[14px] font-bold">
                       {pairLabel(position.symbol)}
                     </span>
                     <span
                       className={cx(
-                        'chip',
+                        'inline-flex items-center rounded px-1.5 py-0.5 text-[10.5px] font-bold tnum',
                         position.direction === 'BUY'
-                          ? 'border-up/30 text-up'
-                          : 'border-down/30 text-down'
+                          ? 'bg-up/12 text-up'
+                          : 'bg-down/12 text-down'
                       )}
                     >
                       {position.direction} {position.volume}
@@ -263,7 +285,7 @@ export default function Dashboard() {
                 <div className="text-right shrink-0">
                   <p
                     className={cx(
-                      'tnum text-[14px]',
+                      'tnum text-[14px] font-bold',
                       position.profit >= 0 ? 'text-up' : 'text-down'
                     )}
                   >

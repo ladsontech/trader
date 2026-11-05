@@ -31,19 +31,6 @@ export interface TradeBotUser {
   createdAt?: unknown;
 }
 
-/**
- * Only decides whether to SHOW the Admin link. The admin data itself comes
- * from the tbAdminData Cloud Function, which checks the caller's verified
- * sign-in on the server — there is no password in this code any more.
- */
-export const ADMIN_PHONE_DIGITS = ['0753894149'];
-
-export function isTradeBotAdmin(email?: string | null): boolean {
-  const digits = (email?.split('@')[0] || '').replace(/\D/g, '');
-  const local = digits.startsWith('256') && digits.length === 12 ? `0${digits.slice(3)}` : digits;
-  return ADMIN_PHONE_DIGITS.includes(local);
-}
-
 interface AuthContextValue {
   user: User | null;
   userData: TradeBotUser | null;
@@ -177,9 +164,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [user]);
 
+  /**
+   * Admin status comes strictly from the server-stored Firestore profile
+   * (`tradebot_users/{uid}.isAdmin === true` or `role === 'admin'`).
+   * Clients cannot write `isAdmin: true` due to Firestore security rules.
+   */
   const isAdmin = useMemo(
-    () => Boolean(userData?.isAdmin) || userData?.role === 'admin' || isTradeBotAdmin(user?.email),
-    [userData?.isAdmin, userData?.role, user?.email]
+    () => Boolean(userData?.isAdmin) || userData?.role === 'admin',
+    [userData?.isAdmin, userData?.role]
   );
 
   const isSubscribed = useMemo(() => {

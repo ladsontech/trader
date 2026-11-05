@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import { useAuth } from '../lib/auth-context';
 import { adminData, apiErrorMessage } from '../lib/api';
 import { Card, Notice, SectionTitle, StatusDot, cx } from '../components/ui';
 import {
@@ -54,6 +57,7 @@ interface TransactionRecord {
 }
 
 export default function Admin() {
+  const { isAdmin } = useAuth();
   const [loadError, setLoadError] = useState('');
   const [forbidden, setForbidden] = useState(false);
 
@@ -74,25 +78,93 @@ export default function Admin() {
   const [txStatusFilter, setTxStatusFilter] = useState<'ALL' | 'completed' | 'pending' | 'failed'>('ALL');
   const [txCurrencyFilter, setTxCurrencyFilter] = useState<'ALL' | 'UGX' | 'KES'>('ALL');
 
-  // Admin rights are checked by the tbAdminData Cloud Function, not here.
+  // Reads sign-ups and deposits directly from Firestore (enforced on the server
+  // by the Firestore security rule checking `tradebot_users/{uid}.isAdmin == true`),
+  // with fallback to the tbAdminData Cloud Function.
   const load = useCallback(async () => {
     setLoadingUsers(true);
     setLoadingTx(true);
     setLoadError('');
     try {
-      const data = await adminData();
-      setUsers(data.users as unknown as UserRecord[]);
-      setTransactions(data.transactions as unknown as TransactionRecord[]);
+      const [usersSnap, txSnap] = await Promise.all([
+        getDocs(collection(db, 'tradebot_users')),
+        getDocs(collection(db, 'tradebot_transactions')),
+      ]);
+
+      const toMs = (ts: any): number => {
+        if (!ts) return 0;
+        if (typeof ts.toMillis === 'function') return ts.toMillis();
+        if (typeof ts.getTime === 'function') return ts.getTime();
+        if (typeof ts.seconds === 'number') return ts.seconds * 1000;
+        if (typeof ts === 'number') return ts;
+        const p = Date.parse(ts);
+        return isNaN(p) ? 0 : p;
+      };
+
+      const fsUsers: UserRecord[] = usersSnap.docs
+        .map((d) => {
+          const u = d.data() as Record<string, any>;
+          return {
+            id: d.id,
+            phoneDigits: u.phoneDigits,
+            country: u.country,
+            currency: u.currency,
+            subscriptionPlan: u.subscriptionPlan ?? null,
+            subscriptionStatus: u.subscriptionStatus ?? 'none',
+            subscriptionExpiresAt: Number(u.subscriptionExpiresAt) || undefined,
+            subscriptionActivatedAt: Number(u.subscriptionActivatedAt) || undefined,
+            broker: u.broker ?? null,
+            brokerConnected: Boolean(u.brokerConnected),
+            brokerAccountId: u.brokerAccountId ?? null,
+            brokerServer: u.brokerServer ?? null,
+            botEnabled: Boolean(u.botEnabled),
+            onboardedAt: u.onboardedAt,
+            isAdmin: Boolean(u.isAdmin) || u.role === 'admin',
+            createdAt: toMs(u.createdAt) || u.onboardedAt || 0,
+          };
+        })
+        .sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
+
+      const fsTxs: TransactionRecord[] = txSnap.docs
+        .map((d) => {
+          const t = d.data() as Record<string, any>;
+          return {
+            id: d.id,
+            reference: t.reference ?? d.id,
+            userId: t.userId,
+            phoneNumber: t.phoneNumber,
+            amount: Number(t.amount) || 0,
+            currency: t.currency ?? 'UGX',
+            planId: t.planId,
+            status: t.status === 'creating' ? 'pending' : (t.status ?? 'pending'),
+            provider: t.provider ?? 'MarzPay',
+            paymentMethod: t.paymentMethod,
+            createdAt: toMs(t.createdAt),
+            completedAt: toMs(t.completedAt),
+            failureReason: t.failureReason,
+          };
+        })
+        .sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
+
+      setUsers(fsUsers);
+      setTransactions(fsTxs);
       setForbidden(false);
-    } catch (err) {
-      const code = ((err as { code?: string })?.code || '').replace(/^functions\//, '');
-      if (code === 'permission-denied') setForbidden(true);
-      else setLoadError(apiErrorMessage(err, 'Could not load admin data.'));
+    } catch (fsErr) {
+      try {
+        const data = await adminData();
+        setUsers(data.users as unknown as UserRecord[]);
+        setTransactions(data.transactions as unknown as TransactionRecord[]);
+        setForbidden(false);
+      } catch (err) {
+        const code = ((fsErr as { code?: string })?.code || (err as { code?: string })?.code || '').replace(/^functions\//, '');
+        if (code === 'permission-denied' && !isAdmin) setForbidden(true);
+        else setLoadError(apiErrorMessage(fsErr, 'Could not load admin data.'));
+      }
     } finally {
       setLoadingUsers(false);
       setLoadingTx(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     load();
@@ -243,7 +315,7 @@ export default function Admin() {
           </div>
           <h1 className="text-lg font-bold text-ink">Admins only</h1>
           <p className="text-xs text-ink-soft">
-            Sign in with an administrator phone number to see this page.
+            Your account needs administrator access (isAdmin: true in Firestore) to view this page.
           </p>
         </Card>
       </div>

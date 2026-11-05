@@ -189,7 +189,7 @@ describe("admin", () => {
     expect(ok.users).toHaveLength(2);
     expect(ok.users.find((u: any) => u.id === "fsAdmin")?.isAdmin).toBe(true);
     expect(ok.transactions[0]).toMatchObject({ amount: 50000, status: "completed" });
-    expect(isAdminEmail("256753894149@investio.app")).toBe(true);
+    expect(isAdminEmail("256753894149@investio.app")).toBe(false);
     expect(isAdminEmail(null)).toBe(false);
   });
 });
