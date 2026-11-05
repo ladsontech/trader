@@ -134,7 +134,7 @@ export default function Settings() {
       <Card className="p-5 mt-4" quiet>
         <SectionTitle title="Risk disclosure" />
         <p className="text-[12.5px] text-ink-soft leading-relaxed">
-          TradeBot places orders on a broker account that belongs to you. Trading leveraged
+          EA Trading Bot places orders on a broker account that belongs to you. Trading leveraged
           forex can lose money, including more than you intended on a fast market. Past
           performance never guarantees future results. Only trade with money you can afford
           to lose, and consider testing on a demo account first.

@@ -262,7 +262,7 @@ export default function Admin() {
             <span className="chip text-[11px] font-semibold text-accent">Admin Portal</span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink mt-1.5">
-            TradeBot Master Admin
+            EA Trading Bot Master Admin
           </h1>
           <p className="text-xs text-ink-soft mt-0.5">
             Real-time analytics for total deposits, revenue, and registered user sign-ups.
@@ -503,7 +503,7 @@ export default function Admin() {
             <div className="flex items-center justify-between mb-4">
               <SectionTitle
                 title="Recent Sign-ups"
-                subtitle="The latest users registered on TradeBot."
+                subtitle="The latest users registered on EA Trading Bot."
               />
               <button
                 onClick={() => setActiveTab('users')}
@@ -552,7 +552,7 @@ export default function Admin() {
         <Card className="p-5 space-y-4">
           <SectionTitle
             title="Registered Users Directory"
-            subtitle="Full listing of all accounts registered on TradeBot."
+            subtitle="Full listing of all accounts registered on EA Trading Bot."
           />
 
           {/* Filters */}
@@ -719,7 +719,7 @@ export default function Admin() {
         <Card className="p-5 space-y-4">
           <SectionTitle
             title="Total Deposits & Transactions"
-            subtitle="Real-time log of subscription deposits made to TradeBot."
+            subtitle="Real-time log of subscription deposits made to EA Trading Bot."
           />
 
           {/* Filters */}

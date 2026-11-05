@@ -3,9 +3,9 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { useAuth } from '../../lib/auth-context';
 import { StatusDot, cx } from '../ui';
+import { BrandLogo, BrandMark } from '../Brand';
 import {
   BarChart3,
-  Bot,
   Check,
   LayoutDashboard,
   LogOut,
@@ -56,9 +56,7 @@ export default function AppLayout() {
       <div className="min-h-screen flex flex-col">
         <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur-xl">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-            <div className="w-8 h-8 shrink-0 rounded-[9px] bg-accent text-white flex items-center justify-center">
-              <Bot className="w-4 h-4" />
-            </div>
+            <BrandMark size={32} />
             <SetupSteps step={isSubscribed ? 3 : 2} />
             <button
               type="button"
@@ -100,12 +98,7 @@ export default function AppLayout() {
       {/* Top bar */}
       <header className="sticky top-0 z-40 h-14 border-b border-line bg-canvas/85 backdrop-blur-xl">
         <div className="h-full max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-[9px] bg-accent text-white flex items-center justify-center">
-              <Bot className="w-4 h-4" />
-            </div>
-            <span className="text-[15px] font-semibold tracking-tight">TradeBot</span>
-          </div>
+          <BrandLogo size={32} className="text-[15px]" />
 
           <div className="flex items-center gap-2">
             {isAdmin && (

@@ -268,6 +268,33 @@
   .bg-raised {
     background: var(--color-surface-2);
   }
+
+  /* Dark brand panel on the sign-in screen. */
+  .auth-panel {
+    background:
+      radial-gradient(60% 50% at 85% 10%, rgba(45, 212, 191, 0.22), transparent 70%),
+      radial-gradient(50% 45% at 0% 100%, rgba(14, 159, 119, 0.28), transparent 70%),
+      linear-gradient(160deg, #062a22 0%, #071c19 55%, #050f12 100%);
+  }
+  .auth-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: radial-gradient(ellipse at 70% 30%, #000 20%, transparent 75%);
+    pointer-events: none;
+  }
+
+  .auth-submit {
+    background: linear-gradient(135deg, #12b386 0%, #0b8a67 100%);
+    box-shadow: 0 8px 20px -8px rgba(14, 159, 119, 0.7);
+  }
+  .auth-submit:not(:disabled):hover {
+    filter: brightness(1.06);
+  }
 }
 
 @keyframes fade-up {

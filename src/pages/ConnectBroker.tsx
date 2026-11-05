@@ -188,7 +188,7 @@ export default function ConnectBroker() {
     <div className="max-w-2xl">
       <PageTitle
         title="Connect your broker"
-        subtitle="TradeBot trades on your own MetaTrader 5 account. Your money stays with your broker and you can disconnect at any time."
+        subtitle="EA Trading Bot trades on your own MetaTrader 5 account. Your money stays with your broker and you can disconnect at any time."
       />
 
       <div className="grid sm:grid-cols-2 gap-3">
