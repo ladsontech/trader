@@ -1,0 +1,40 @@
+{
+  "id": "/",
+  "name": "EA Trading Bot",
+  "short_name": "EA Bot",
+  "description": "EA Trading Bot – automated forex trading on your own Exness or FBS MT5 account. Pay with Mobile Money.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#062a22",
+  "theme_color": "#0e9f77",
+  "categories": ["finance", "business"],
+  "icons": [
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
+

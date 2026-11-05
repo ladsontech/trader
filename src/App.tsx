@@ -11,6 +11,7 @@ import Trades from './pages/Trades';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import { Spinner } from './components/ui';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 
 function Booting() {
   return (
@@ -116,6 +117,7 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <AppRoutes />
+        <PwaInstallPrompt />
       </BrowserRouter>
     </AuthProvider>
   );
