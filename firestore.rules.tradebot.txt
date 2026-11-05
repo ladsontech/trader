@@ -49,10 +49,11 @@
       allow create: if tbOwner(userId)
         && request.resource.data.keys().hasOnly([
              'phoneDigits', 'country', 'currency', 'subscriptionStatus',
-             'brokerConnected', 'botEnabled', 'createdAt', 'onboardedAt'])
+             'brokerConnected', 'botEnabled', 'isAdmin', 'createdAt', 'onboardedAt'])
         && request.resource.data.get('subscriptionStatus', 'none') == 'none'
         && request.resource.data.get('brokerConnected', false) == false
-        && request.resource.data.get('botEnabled', false) == false;
+        && request.resource.data.get('botEnabled', false) == false
+        && request.resource.data.get('isAdmin', false) == false;
 
       allow update: if tbOwner(userId) && tbClientWritableOnly();
 

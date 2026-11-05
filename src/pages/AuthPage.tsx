@@ -97,6 +97,7 @@ export default function AuthPage() {
             subscriptionStatus: 'none',
             brokerConnected: false,
             botEnabled: false,
+            isAdmin: false,
             createdAt: new Date(),
           },
           { merge: true }

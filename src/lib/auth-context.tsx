@@ -27,6 +27,7 @@ export interface TradeBotUser {
   lastEquity?: number;
   lastBalance?: number;
   isAdmin?: boolean;
+  role?: string;
   createdAt?: unknown;
 }
 
@@ -109,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         subscriptionStatus: 'none',
         brokerConnected: false,
         botEnabled: false,
+        isAdmin: false,
         createdAt: new Date(),
       };
 
@@ -175,7 +177,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, [user]);
 
-  const isAdmin = useMemo(() => isTradeBotAdmin(user?.email), [user?.email]);
+  const isAdmin = useMemo(
+    () => Boolean(userData?.isAdmin) || userData?.role === 'admin' || isTradeBotAdmin(user?.email),
+    [userData?.isAdmin, userData?.role, user?.email]
+  );
 
   const isSubscribed = useMemo(() => {
     if (!userData) return false;

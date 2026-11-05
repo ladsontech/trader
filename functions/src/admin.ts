@@ -34,7 +34,14 @@ const ms = (v: unknown) => timestampToMillis(v) || (typeof v === "string" ? Date
 
 export const tbAdminData = onCall({ timeoutSeconds: 60 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Please sign in first.");
-  if (!isAdminEmail(request.auth.token.email)) {
+
+  let callerIsAdmin = isAdminEmail(request.auth.token.email);
+  if (!callerIsAdmin) {
+    const callerSnap = await db.collection(COL.users).doc(request.auth.uid).get();
+    const callerData = callerSnap.exists ? callerSnap.data() : null;
+    callerIsAdmin = Boolean(callerData?.isAdmin) || callerData?.role === "admin";
+  }
+  if (!callerIsAdmin) {
     throw new HttpsError("permission-denied", "This page is for TradeBot administrators only.");
   }
 
@@ -59,6 +66,7 @@ export const tbAdminData = onCall({ timeoutSeconds: 60 }, async (request) => {
       brokerAccountId: u.brokerAccountId ?? null,
       brokerServer: u.brokerServer ?? null,
       botEnabled: Boolean(u.botEnabled),
+      isAdmin: Boolean(u.isAdmin) || u.role === "admin",
       createdAt: ms(u.createdAt) || null,
     };
   });

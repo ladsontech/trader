@@ -198,7 +198,8 @@ async function runForUser(
 ): Promise<RunOutcome> {
   const outcome: RunOutcome = { uid, placed: 0, skipped: [] };
 
-  const plan = PLANS[user.subscriptionPlan as string];
+  const isAdmin = Boolean(user.isAdmin) || user.role === "admin";
+  const plan = PLANS[user.subscriptionPlan as string] || (isAdmin ? PLANS.premium : undefined);
   if (!plan) {
     outcome.skipped.push("no-plan");
     return outcome;

@@ -184,8 +184,10 @@ describe("admin", () => {
     store.docs.set("tradebot_users/a", { phoneDigits: "0770000001", subscriptionStatus: "active", createdAt: 1 });
     store.docs.set("tradebot_transactions/r1", { userId: "a", amount: 50000, currency: "UGX", status: "completed", createdAt: 5 });
     await expect((tbAdminData as any).run({ data: {}, auth: auth("x", "0770123456@investio.app") })).rejects.toThrow(/administrators only/);
-    const ok = await (tbAdminData as any).run({ data: {}, auth: auth("admin", "0753894149@investio.app") });
-    expect(ok.users).toHaveLength(1);
+    store.docs.set("tradebot_users/fsAdmin", { phoneDigits: "0770999999", isAdmin: true, createdAt: 2 });
+    const ok = await (tbAdminData as any).run({ data: {}, auth: auth("fsAdmin", "0770999999@investio.app") });
+    expect(ok.users).toHaveLength(2);
+    expect(ok.users.find((u: any) => u.id === "fsAdmin")?.isAdmin).toBe(true);
     expect(ok.transactions[0]).toMatchObject({ amount: 50000, status: "completed" });
     expect(isAdminEmail("256753894149@investio.app")).toBe(true);
     expect(isAdminEmail(null)).toBe(false);

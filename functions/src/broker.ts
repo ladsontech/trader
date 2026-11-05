@@ -25,9 +25,11 @@ const brokerOptions = { secrets: [METAAPI_TOKEN, BROKER_ENC_KEY], timeoutSeconds
 async function requireActiveSubscription(uid: string) {
   const userDoc = await db.collection(COL.users).doc(uid).get();
   const data = userDoc.exists ? userDoc.data()! : null;
+  const isAdmin = Boolean(data?.isAdmin) || data?.role === "admin";
   const active =
-    data?.subscriptionStatus === "active" &&
-    Number(data?.subscriptionExpiresAt || 0) > Date.now();
+    isAdmin ||
+    (data?.subscriptionStatus === "active" &&
+      Number(data?.subscriptionExpiresAt || 0) > Date.now());
 
   if (!active) {
     throw new HttpsError(
